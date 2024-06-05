@@ -144,11 +144,17 @@ ACCOUNT_EMAIL_VERIFICATION = "none"
 LOGIN_REDIRECT_URL = "homepage"
 LOGIN_URL = "sign-in"
 
-HOSTS = [
-    "redbox-dev.ai.cabinetoffice.gov.uk",
-    "redbox-preprod.ai.cabinetoffice.gov.uk",
-    "redbox.ai.cabinetoffice.gov.uk",
-]
+env_hosts = env.str("HOSTS")
+
+HOSTS = (
+    env_hosts.split(",")
+    if env_hosts is not None
+    else [
+        "redbox-dev.ai.cabinetoffice.gov.uk",
+        "redbox-preprod.ai.cabinetoffice.gov.uk",
+        "redbox.ai.cabinetoffice.gov.uk",
+    ]
+)
 
 
 # CSP settings https://content-security-policy.com/
@@ -249,7 +255,7 @@ else:
     # Mozilla guidance max-age 2 years
     SECURE_HSTS_SECONDS = 2 * 365 * 24 * 60 * 60
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True  # False when testing via http
 
 
 DATABASES = {
@@ -267,7 +273,9 @@ LOG_LEVEL = env.str("DJANGO_LOG_LEVEL", "WARNING")
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "formatters": {"verbose": {"format": "%(asctime)s %(levelname)s %(module)s: %(message)s"}},
+    "formatters": {
+        "verbose": {"format": "%(asctime)s %(levelname)s %(module)s: %(message)s"}
+    },
     "handlers": {
         "file": {
             "level": LOG_LEVEL,
@@ -308,7 +316,9 @@ elif EMAIL_BACKEND_TYPE == "CONSOLE":
 elif EMAIL_BACKEND_TYPE == "GOVUKNOTIFY":
     EMAIL_BACKEND = "django_gov_notify.backends.NotifyEmailBackend"
     GOVUK_NOTIFY_API_KEY = env.str("GOVUK_NOTIFY_API_KEY")
-    GOVUK_NOTIFY_PLAIN_EMAIL_TEMPLATE_ID = env.str("GOVUK_NOTIFY_PLAIN_EMAIL_TEMPLATE_ID")
+    GOVUK_NOTIFY_PLAIN_EMAIL_TEMPLATE_ID = env.str(
+        "GOVUK_NOTIFY_PLAIN_EMAIL_TEMPLATE_ID"
+    )
 else:
     message = f"Unknown EMAIL_BACKEND_TYPE of {EMAIL_BACKEND_TYPE}"
     raise ValueError(message)
