@@ -153,11 +153,17 @@ ACCOUNT_EMAIL_VERIFICATION = "none"
 # LOGIN_REDIRECT_URL = "homepage"
 # LOGIN_URL = "sign-in"
 
-HOSTS = [
-    "redbox-dev.ai.cabinetoffice.gov.uk",
-    "redbox-preprod.ai.cabinetoffice.gov.uk",
-    "redbox.ai.cabinetoffice.gov.uk",
-]
+env_hosts = env.str("HOSTS")
+
+HOSTS = (
+    env_hosts.split(",")
+    if env_hosts is not None
+    else [
+        "redbox-dev.ai.cabinetoffice.gov.uk",
+        "redbox-preprod.ai.cabinetoffice.gov.uk",
+        "redbox.ai.cabinetoffice.gov.uk",
+    ]
+)
 
 
 # CSP settings https://content-security-policy.com/
@@ -258,7 +264,7 @@ else:
     # Mozilla guidance max-age 2 years
     SECURE_HSTS_SECONDS = 2 * 365 * 24 * 60 * 60
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True  # False when testing via http
 
 
 DATABASES = {
