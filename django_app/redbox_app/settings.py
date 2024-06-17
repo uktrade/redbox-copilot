@@ -4,6 +4,7 @@ import socket
 from pathlib import Path
 
 import environ
+from django.urls import reverse_lazy
 import sentry_sdk
 from dotenv import load_dotenv
 from redbox_app.setting_enums import Classification, Environment
@@ -17,6 +18,7 @@ env = environ.Env()
 SECRET_KEY = env.str("DJANGO_SECRET_KEY")
 ENVIRONMENT = Environment[env.str("ENVIRONMENT").upper()]
 WEBSOCKET_SCHEME = "ws" if ENVIRONMENT.is_local else "wss"
+LOGIN_METHOD = env.str("LOGIN_METHOD")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool("DEBUG")
@@ -61,6 +63,11 @@ INSTALLED_APPS = [
     "compressor",
     "magic_link",
 ]
+
+if LOGIN_METHOD == "sso":
+    INSTALLED_APPS.append("authbroker_client")
+elif LOGIN_METHOD == "magic_link":
+    INSTALLED_APPS.append("magic_link")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -114,6 +121,9 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
 
+if LOGIN_METHOD == "sso":
+    AUTHENTICATION_BACKENDS.append("authbroker_client.backends.AuthbrokerBackend")
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -141,8 +151,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SITE_ID = 1
 AUTH_USER_MODEL = "redbox_core.User"
 ACCOUNT_EMAIL_VERIFICATION = "none"
-LOGIN_REDIRECT_URL = "homepage"
-LOGIN_URL = "sign-in"
+# LOGIN_REDIRECT_URL = "homepage"
+# LOGIN_URL = "sign-in"
 
 # CSP settings https://content-security-policy.com/
 # https://django-csp.readthedocs.io/
@@ -222,14 +232,14 @@ else:
     # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security
     # Mozilla guidance max-age 2 years
     SECURE_HSTS_SECONDS = 2 * 365 * 24 * 60 * 60
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SESSION_COOKIE_SECURE = True
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SESSION_COOKIE_SECURE = False
 
 if ENVIRONMENT.is_test:
     ALLOWED_HOSTS = ENVIRONMENT.hosts
 else:
     LOCALHOST = socket.gethostbyname(socket.gethostname())
-    ALLOWED_HOSTS = [LOCALHOST, *ENVIRONMENT.hosts]
+    ALLOWED_HOSTS = [LOCALHOST, *ENVIRONMENT.hosts, "redbox-trial.uktrade.digital","dbt-default-alb-1021417632.eu-west-2.elb.amazonaws.com"]
 
 if not ENVIRONMENT.is_local:
     SENTRY_DSN = env.str("SENTRY_DSN", None)
@@ -325,3 +335,26 @@ USE_STREAMING = env.bool("USE_STREAMING")
 FILE_EXPIRY_IN_SECONDS = env.int("FILE_EXPIRY_IN_DAYS") * 24 * 60 * 60
 SUPERUSER_EMAIL = env.str("SUPERUSER_EMAIL", None)
 MAX_SECURITY_CLASSIFICATION = Classification[env.str("MAX_SECURITY_CLASSIFICATION")]
+
+if LOGIN_METHOD == "sso":
+    AUTHBROKER_URL = env.str("AUTHBROKER_URL")
+    AUTHBROKER_CLIENT_ID = env.str("AUTHBROKER_CLIENT_ID")
+    AUTHBROKER_CLIENT_SECRET = env.str("AUTHBROKER_CLIENT_SECRET")
+    # AUTHBROKER_TOKEN_SESSION_KEY = env.str("AUTHBROKER_TOKEN_SESSION_KEY")
+    # AUTHBROKER_STAFF_SSO_SCOPE = env.str("AUTHBROKER_STAFF_SSO_SCOPE")
+
+    # OAUTHLIB_INSECURE_TRANSPORT = env.int(
+    #     "OAUTHLIB_INSECURE_TRANSPORT"
+    # )  # This is just needed in mock sso
+    # TEST_SSO_PROVIDER_SET_RETURNED_ACCESS_TOKEN = env.str(
+    #     "MOCK_SSO_TOKEN"
+    # )  # Nest into statement dependent upon hosting environment
+
+    LOGIN_URL = reverse_lazy("authbroker_client:login")
+    LOGIN_REDIRECT_URL = reverse_lazy("callback") 
+elif LOGIN_METHOD == "magic_link":
+    LOGIN_REDIRECT_URL = "homepage"
+    LOGIN_URL = "sign-in"
+else:
+    LOGIN_REDIRECT_URL = "homepage"
+    LOGIN_URL = "sign-in"

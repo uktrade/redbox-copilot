@@ -13,12 +13,12 @@ log = logging.getLogger()
 class ElasticLocalSettings(BaseModel):
     """settings required for a local/ec2 instance of elastic"""
 
-    host: str = "elasticsearch"
+    host: str = "elasticsearch.internal"
     port: int = 9200
     scheme: str = "http"
     user: str = "elastic"
     version: str = "8.11.0"
-    password: str = "redboxpass"
+    password: str = "YuI9tK*O2mtQFAZU+bFF"
     subscription_level: str = "basic"
 
 
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     partition_strategy: Literal["auto", "fast", "ocr_only", "hi_res"] = "fast"
     clustering_strategy: Literal["full"] | None = None
 
-    elastic: ElasticCloudSettings | ElasticLocalSettings = ElasticLocalSettings()
+    elastic: ElasticLocalSettings = ElasticLocalSettings()
     elastic_root_index: str = "redbox-data"
 
     kibana_system_password: str = "redboxpass"

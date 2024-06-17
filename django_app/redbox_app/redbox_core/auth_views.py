@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 def sign_in_view(request: HttpRequest):
     if request.user.is_authenticated:
         return redirect("homepage")
+    if settings.LOGIN_METHOD == "sso":
+        return redirect("/auth/login")
     if request.method == "POST":
         form = SignInForm(request.POST)
         if form.is_valid():
@@ -38,13 +40,6 @@ def sign_in_view(request: HttpRequest):
                 "errors": form.errors,
             },
         )
-
-    return render(
-        request,
-        template_name="sign-in.html",
-        context={"request": request},
-    )
-
 
 def sign_in_link_sent_view(request: HttpRequest):
     if request.user.is_authenticated:

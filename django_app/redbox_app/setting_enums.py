@@ -19,7 +19,7 @@ class Environment(StrEnum):
 
     LOCAL = ("LOCAL", True, ["localhost", "127.0.0.1", "0.0.0.0"])  # noqa: S104 nosec: B104: Not in prod
     INTEGRATION = ("INTEGRATION", True, ["localhost", "127.0.0.1", "0.0.0.0"])  # noqa: S104 nosec: B104: Not in prod
-    DEV = ("DEV", False, ["redbox-dev.ai.cabinetoffice.gov.uk"])
+    DEV = ("DEV", False, ["redbox-trial.uktrade.digital"])
     PREPROD = ("PREPROD", False, ["redbox-preprod.ai.cabinetoffice.gov.uk"])
     PROD = ("PROD", False, ["redbox.ai.cabinetoffice.gov.uk"])
 
