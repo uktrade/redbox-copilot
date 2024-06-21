@@ -6,13 +6,17 @@ from botocore.config import Config
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
-from django_use_email_as_username.models import BaseUser, BaseUserManager
+#from django_use_email_as_username.models import BaseUser, BaseUserManager
+from django.contrib.auth.base_user import BaseUserManager
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.utils.translation import gettext_lazy as _
+
 from jose import jwt
 from yarl import URL
 
 
 class UUIDPrimaryKeyBase(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True)
 
     class Meta:
         abstract = True
@@ -27,14 +31,54 @@ class TimeStampedModel(models.Model):
         ordering = ["created_at"]
 
 
-class User(BaseUser, UUIDPrimaryKeyBase):
-    username = None
-    verified = models.BooleanField(default=False, blank=True, null=True)
-    invited_at = models.DateTimeField(default=None, blank=True, null=True)
-    invite_accepted_at = models.DateTimeField(default=None, blank=True, null=True)
-    last_token_sent_at = models.DateTimeField(editable=False, blank=True, null=True)
-    password = models.CharField("password", max_length=128, blank=True, null=True)
-    objects = BaseUserManager()
+class RedboxUserManager(BaseUserManager):
+    """Define a model manager for User model with no username field."""
+
+    use_in_migrations = True
+
+    def _create_user(self, username, password, **extra_fields):
+        """Create and save a User with the given email and password."""
+        if not username:
+            raise ValueError("The given email must be set")
+        #email = self.normalize_email(email)
+        #user = self.model(email=email, **extra_fields)
+        User.set_password(password)
+        User.save(using=self._db)
+        return user
+
+    def create_user(self, username, password=None, **extra_fields):
+        """Create and save a regular User with the given email and password."""
+        extra_fields.setdefault("is_staff", False)
+        extra_fields.setdefault("is_superuser", False)
+        return self._create_user(username, password, **extra_fields)
+
+    def create_superuser(self, username, password, **extra_fields):
+        """Create and save a SuperUser with the given email and password."""
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superuser must have is_staff=True.")
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superuser must have is_superuser=True.")
+
+        return self._create_user(username, password, **extra_fields)
+
+
+class User(AbstractBaseUser, PermissionsMixin, UUIDPrimaryKeyBase):
+    username = models.EmailField(unique=True)
+    email = models.EmailField(unique=True)
+    first_name = models.CharField(max_length=48)
+    last_name = models.CharField(max_length=48)
+    is_staff = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    is_superuser = models.BooleanField(default=False)
+    date_joined = models.DateTimeField(default=timezone.now)
+
+
+    USERNAME_FIELD = 'username'
+    REQUIRED_FIELDS = []
+    objects = RedboxUserManager()
 
     def __str__(self) -> str:  # pragma: no cover
         return f"{self.email}"
@@ -45,7 +89,7 @@ class User(BaseUser, UUIDPrimaryKeyBase):
 
     def get_bearer_token(self) -> str:
         """the bearer token expected by the core-api"""
-        user_uuid = str(self.id)
+        user_uuid = str(self.username)
         bearer_token = jwt.encode({"user_uuid": user_uuid}, key=settings.SECRET_KEY)
         return f"Bearer {bearer_token}"
 

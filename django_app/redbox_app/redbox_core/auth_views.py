@@ -3,6 +3,7 @@ import logging
 from django.contrib.auth import logout
 from django.http import HttpRequest
 from django.shortcuts import redirect, render
+from django.conf import settings
 from magic_link.models import MagicLink
 from redbox_app.redbox_core import email_handler, models
 from redbox_app.redbox_core.forms import SignInForm
@@ -15,7 +16,7 @@ def sign_in_view(request: HttpRequest):
     if request.user.is_authenticated:
         return redirect("homepage")
     if settings.LOGIN_METHOD == "sso":
-        return redirect("/auth/login")
+        return redirect("/auth/login/")
     if request.method == "POST":
         form = SignInForm(request.POST)
         if form.is_valid():

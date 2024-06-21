@@ -340,6 +340,7 @@ if LOGIN_METHOD == "sso":
     AUTHBROKER_URL = env.str("AUTHBROKER_URL")
     AUTHBROKER_CLIENT_ID = env.str("AUTHBROKER_CLIENT_ID")
     AUTHBROKER_CLIENT_SECRET = env.str("AUTHBROKER_CLIENT_SECRET")
+    # AUTHBROKER_USE_USER_ID_GUID = True
     # AUTHBROKER_TOKEN_SESSION_KEY = env.str("AUTHBROKER_TOKEN_SESSION_KEY")
     # AUTHBROKER_STAFF_SSO_SCOPE = env.str("AUTHBROKER_STAFF_SSO_SCOPE")
 
@@ -351,7 +352,7 @@ if LOGIN_METHOD == "sso":
     # )  # Nest into statement dependent upon hosting environment
 
     LOGIN_URL = reverse_lazy("authbroker_client:login")
-    LOGIN_REDIRECT_URL = reverse_lazy("callback") 
+    LOGIN_REDIRECT_URL = reverse_lazy("homepage")
 elif LOGIN_METHOD == "magic_link":
     LOGIN_REDIRECT_URL = "homepage"
     LOGIN_URL = "sign-in"

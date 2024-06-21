@@ -59,7 +59,6 @@ class ChatHistoryAdmin(admin.ModelAdmin):
     date_hierarchy = "created_at"
     actions = ["export_as_csv"]
 
-
 admin.site.register(models.User, UserResource)
 admin.site.register(models.File, FileResource)
 admin.site.register(models.ChatHistory, ChatHistoryAdmin)
