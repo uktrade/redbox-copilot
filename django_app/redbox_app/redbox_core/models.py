@@ -41,10 +41,10 @@ class RedboxUserManager(BaseUserManager):
         if not username:
             raise ValueError("The given email must be set")
         #email = self.normalize_email(email)
-        #user = self.model(email=email, **extra_fields)
+        User = self.model(email=email, **extra_fields)
         User.set_password(password)
         User.save(using=self._db)
-        return user
+        return User
 
     def create_user(self, username, password=None, **extra_fields):
         """Create and save a regular User with the given email and password."""
@@ -65,6 +65,8 @@ class RedboxUserManager(BaseUserManager):
         return self._create_user(username, password, **extra_fields)
 
 
+
+
 class User(AbstractBaseUser, PermissionsMixin, UUIDPrimaryKeyBase):
     username = models.EmailField(unique=True)
     email = models.EmailField(unique=True)
@@ -74,7 +76,6 @@ class User(AbstractBaseUser, PermissionsMixin, UUIDPrimaryKeyBase):
     is_active = models.BooleanField(default=True)
     is_superuser = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
-
 
     USERNAME_FIELD = 'username'
     REQUIRED_FIELDS = []
