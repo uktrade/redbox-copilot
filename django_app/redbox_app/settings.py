@@ -241,7 +241,7 @@ if ENVIRONMENT.is_test:
     ALLOWED_HOSTS = ENVIRONMENT.hosts
 else:
     LOCALHOST = socket.gethostbyname(socket.gethostname())
-    ALLOWED_HOSTS = [LOCALHOST, *ENVIRONMENT.hosts,"redbox-sandbox.uktrade.digital","dbt-default-alb-1550180991.eu-west-2.elb.amazonaws.com"]
+    ALLOWED_HOSTS = [LOCALHOST, *ENVIRONMENT.hosts,"redbox-trial.uktrade.digital","dbt-default-alb-1021417632.eu-west-2.elb.amazonaws.com"]
 
 if not ENVIRONMENT.is_local:
     SENTRY_DSN = env.str("SENTRY_DSN", None)
