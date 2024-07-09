@@ -76,10 +76,16 @@ class GetExperimentResults:
         self.experiment_parameters = None
 
     def set_data_version(self, data_version):
+        """
+        This function sets the necessary environment variables depending on your data version.
+        It assumes you have a versioned evaluation folder in your repository e.g. notebooks/evaluation/data/0.2.0
+        This should be copied from the Redbox shared Google Drive.
+        This folder contains the raw files, QA sets, embeddings etc.
+        """
         self.data_version = data_version
         ROOT = Path(__file__).parents[2]
         EVALUATION_DIR = ROOT / "notebooks/evaluation"
-        self.V_ROOT = EVALUATION_DIR / f"data/{self.data_version}"  # UNSURE ATM
+        self.V_ROOT = EVALUATION_DIR / f"data/{self.data_version}"
         self.V_SYNTHETIC = self.V_ROOT / "synthetic"
         self.V_RESULTS = self.V_ROOT / "results"
         self.V_EMBEDDINGS = self.V_ROOT / "embeddings"
@@ -88,6 +94,10 @@ class GetExperimentResults:
         self.ES_CLIENT = self.ENV.elasticsearch_client()
 
     def load_chunks_from_jsonl_to_index(self) -> set:
+        """
+        This function takes the versioned embeddings (e.g. from notebooks/evaluation/data/0.2.0/embeddings)
+        and loads them to ElasticSearch.
+        """
         file_uuids = set()
         file_path = self.V_EMBEDDINGS / f"{self.MODEL}.jsonl"
 
@@ -105,6 +115,9 @@ class GetExperimentResults:
         return file_uuids
 
     def clear_index(self) -> None:
+        """
+        This function clears the indexes from ElasticSearch.
+        """
         if self.ES_CLIENT.indices.exists(index=self.INDEX):
             documents = scan(self.ES_CLIENT, index=self.INDEX, query={"query": {"match_all": {}}})
             bulk_data = [{"_op_type": "delete", "_index": doc["_index"], "_id": doc["_id"]} for doc in documents]
@@ -113,10 +126,9 @@ class GetExperimentResults:
     def get_parameterised_retriever(
         self, es: Annotated[Elasticsearch, Depends(dependencies.get_elasticsearch_client)]
     ) -> BaseRetriever:
-        """Creates an Elasticsearch retriever runnable.
-
+        """
+        Creates an Elasticsearch retriever runnable.
         Runnable takes input of a dict keyed to question, file_uuids and user_uuid.
-
         Runnable returns a list of Chunks.
         """
         default_params = {
@@ -142,11 +154,15 @@ class GetExperimentResults:
 
     def build_retrieval_chain(
         self,
-        llm: Annotated[ChatLiteLLM, Depends(dependencies.get_llm)],  # llm versus self.LLM
+        llm: Annotated[ChatLiteLLM, Depends(dependencies.get_llm)],
         retriever: Annotated[VectorStoreRetriever, Depends(dependencies.get_parameterised_retriever)],
         tokeniser: Annotated[Encoding, Depends(dependencies.get_tokeniser)],
-        env: Annotated[Settings, Depends(dependencies.get_env)],  # get_env versus self.ENV is same-ish thing. PROBLEM
+        env: Annotated[Settings, Depends(dependencies.get_env)],
     ) -> Runnable:
+        """
+        This is an adaptation of core_api.src.build_chains.build_retrieval_chain.
+        Function experiements with different retrieval_system_prompt and retrieval_question_prompt.
+        """
         return (
             RunnablePassthrough.assign(documents=retriever)
             | RunnablePassthrough.assign(
@@ -170,11 +186,17 @@ class GetExperimentResults:
         self,
         question,
     ) -> dict:
-        """Get Redbox response for a given question."""
-
+        """
+        Get Redbox response for a given question.
+        """
         retriever = self.get_parameterised_retriever(es=self.ES_CLIENT)
 
-        chain = self.build_retrieval_chain(llm=self.LLM, retriever=retriever, tokeniser=get_tokeniser(), env=self.ENV)
+        chain = self.build_retrieval_chain(
+            llm=self.LLM, 
+            retriever=retriever, 
+            tokeniser=get_tokeniser(), 
+            env=self.ENV
+            )
 
         response = chain.invoke(
             input=ChainInput(
@@ -199,7 +221,9 @@ class GetExperimentResults:
         return {"output_text": response["response"], "source_documents": filtered_chunks}
 
     def write_rag_results(self) -> None:
-        """Format and write Redbox responses to evaluation dataset."""
+        """
+        Format and write Redbox responses to evaluation dataset.
+        """
 
         synthetic_df = pd.read_csv(f"{self.V_SYNTHETIC}/ragas_synthetic_data.csv")
         inputs = synthetic_df["input"].tolist()
@@ -291,6 +315,9 @@ class GetExperimentResults:
         )
 
     def write_evaluation_results(self) -> None:
+        """
+        This function writes the evaluation results to a csv, identifiable by experiment_name.
+        """
         metric_type = {
             "metric_name": [
                 "Contextual Precision",
@@ -324,7 +351,10 @@ class GetExperimentResults:
         experiment_file_name=None,
         benchmark=None,
     ):
-        """ """
+        """
+        This function loads an csv of experiments to try unless benchmark is specified;
+        in this case it will take the core_api retrieval_system_prompt and retrieval_question_prompt.
+        """
 
         if benchmark:
             self.benchmark = benchmark
@@ -341,7 +371,9 @@ class GetExperimentResults:
             )
 
     def loop_through_experiements(self):
-        """ """
+        """
+        This function calls the other functions to run and write the different experiments.
+        """
         for index, row in self.experiment_parameters.iterrows():
             self.experiment_name = row["experiment_name"]
             self.retrieval_system_prompt = (row["retrieval_system_prompt"],)
@@ -352,7 +384,9 @@ class GetExperimentResults:
             self.write_evaluation_results()
 
     def empirical_ci(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Calculate confidence intervals for aggregated metrics."""
+        """
+        Calculate confidence intervals for aggregated metrics.
+        """
 
         df_grouped = (
             df.groupby(["experiment_name", "metric_name"])["score"]
@@ -370,7 +404,10 @@ class GetExperimentResults:
         return df_grouped
 
     def create_visualisation_plus_grouped_results(self):
-        """ """
+        """
+        This function uses the stored experiment result to save the aggregated metics using empirical_ci().
+        It also saves a barplot (here confidence intervals are calculated by bootstrapping).
+        """
         experiments = []
         experiment_names = self.experiment_parameters["experiment_name"]
         for experiment_name in experiment_names:
@@ -380,8 +417,6 @@ class GetExperimentResults:
 
         experiments_df = pd.concat(experiments)
 
-        # Note that the confidence intervals in sns.barplot is calculated by bootstrapping.
-        # See empirical_ci() above for empirical confidence interval calculation.
         barplot = sns.barplot(experiments_df, x="score", y="metric_name", hue="experiment_name", errorbar=("ci", 95))
         fig = barplot.get_figure()
         fig.savefig(f"{self.V_RESULTS}/{self.experiment_file_name}_boxplot.png", bbox_inches="tight")
@@ -403,14 +438,6 @@ class GetExperimentResults:
     type=str,
     help="Specify the experiment data file name you want to use. (CSV)",
 )
-# @click.option(
-#     "--overwrite",
-#     "-o",
-#     required=False,
-#     is_flag=True,
-#     help="Overwrite existing results"
-# )
-# @click.option('--exp_data', help="Specify name of experiments to run")
 @click.option(
     "--benchmark", "-b", required=False, is_flag=True, help="Use the baseline rag function to get benchmarking results."
 )
