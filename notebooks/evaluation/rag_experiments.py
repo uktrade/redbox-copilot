@@ -1,3 +1,4 @@
+from distutils.core import extension_keywords
 import json
 import sys
 from dataclasses import asdict
@@ -6,12 +7,14 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
+from anthropic import NoneType
 import click
 import jsonlines
 import pandas as pd
 import seaborn as sns
 from deepeval import evaluate
 from deepeval.dataset import EvaluationDataset
+from deepeval.test_case import LLMTestCase, ConversationalTestCase
 from deepeval.metrics import (
     AnswerRelevancyMetric,
     ContextualPrecisionMetric,
@@ -19,6 +22,7 @@ from deepeval.metrics import (
     ContextualRelevancyMetric,
     FaithfulnessMetric,
     HallucinationMetric,
+    KnowledgeRetentionMetric
 )
 from dotenv import find_dotenv, load_dotenv
 from elasticsearch import Elasticsearch
@@ -51,7 +55,7 @@ _ = load_dotenv(find_dotenv())
 
 
 class GetExperimentResults:
-    def __init__(self):
+    def __init__(self, knowledge_retention = False):
         self.data_version = None
         self.benchmark = None
         self.V_EMBEDDINGS = ""
@@ -74,6 +78,7 @@ class GetExperimentResults:
         self.USER_UUID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
         self.experiment_file_name = None
         self.experiment_parameters = None
+        self.knowledge_retention = knowledge_retention
 
     def set_data_version(self, data_version):
         """
@@ -185,6 +190,7 @@ class GetExperimentResults:
     def get_rag_results(
         self,
         question,
+        history
     ) -> dict:
         """
         Get Redbox response for a given question.
@@ -201,7 +207,7 @@ class GetExperimentResults:
         response = chain.invoke(
             input=ChainInput(
                 question=question,
-                chat_history=[{"text": "", "role": "user"}],
+                chat_history=history,
                 file_uuids=list(self.FILE_UUIDS),
                 user_uuid=self.USER_UUID,
             ).model_dump()
@@ -218,33 +224,82 @@ class GetExperimentResults:
             }
             filtered_chunks.append(filtered_chunk)
 
-        return {"output_text": response["response"], "source_documents": filtered_chunks}
+        return {"output_text": response["response"], 
+                "source_documents": filtered_chunks,
+                "text": response["response"]}
 
     def write_rag_results(self) -> None:
         """
         Format and write Redbox responses to evaluation dataset.
         """
 
-        synthetic_df = pd.read_csv(f"{self.V_SYNTHETIC}/ragas_synthetic_data.csv")
+        if self.knowledge_retention:
+            synthetic_df = pd.read_csv(
+                f"{self.V_SYNTHETIC}/retention_synthetic_data.csv"
+            )
+        else:
+            synthetic_df = pd.read_csv(
+            f"{self.V_SYNTHETIC}/ragas_synthetic_data.csv"
+            )
+
         inputs = synthetic_df["input"].tolist()
 
         df_function = synthetic_df.copy()
 
         actual_output = []
         retrieval_context = []
+        
+        history = [{"text":'', "role": "user"}]
 
         for question in inputs:
-            data = self.get_rag_results(question=question)
+            data = self.get_rag_results(question=question,
+                                        history=history)
             actual_output.append(data["output_text"])
             retrieval_context.append(data["source_documents"])
+
+            if self.knowledge_retention:
+                history.append({'text': question, "role": "user"})
+                history.append({'text': data['text'], "role": "ai"})
+            else:
+                pass
 
         df_function["actual_output"] = actual_output
         df_function["retrieval_context"] = retrieval_context
 
-        df_function_clean = df_function.dropna()
-        df_function_clean.to_csv(
+        if self.knowledge_retention:
+            df_function.to_csv(
+            f"{self.V_SYNTHETIC}/{self.experiment_name}_complete_retention_synthetic_data.csv", index=False
+            )
+        else:
+            df_function_clean = df_function.dropna()
+            df_function_clean.to_csv(
             f"{self.V_SYNTHETIC}/{self.experiment_name}_complete_ragas_synthetic_data.csv", index=False
-        )
+            )
+
+    def do_knowledge_retention_evaluation(self) -> None:
+        
+        '''
+        Calculate evaluation metrics for a synthetic RAGAS dataset, aggregate results
+        and write as CSV.
+        '''
+
+        test_cases = pd.read_csv(f'{self.V_SYNTHETIC}/{self.experiment_name}_complete_retention_synthetic_data.csv')
+        
+        messages = []
+
+        for index, row in test_cases.iterrows():
+            
+            messages.append(LLMTestCase(input=row.input, actual_output=row.actual_output))
+
+        dataset = ConversationalTestCase(messages=messages)
+
+        metric = KnowledgeRetentionMetric(threshold=0.5,
+                                          model="gpt-4o",
+                                          include_reason=True)
+        
+        metric.measure(dataset)
+  
+        self.eval_results = pd.DataFrame.from_dict([{'score': metric.score, 'reason': metric.reason}])
 
     def do_evaluation(self) -> None:
         """
@@ -318,33 +373,40 @@ class GetExperimentResults:
         """
         This function writes the evaluation results to a csv, identifiable by experiment_name.
         """
-        metric_type = {
-            "metric_name": [
+
+        if self.knowledge_retention:
+        
+            self.eval_results.to_csv(f"{self.V_RESULTS}/{self.experiment_name}_retention_results.csv", index=False)
+
+        else:
+            metric_type = {
+                "metric_name": [
                 "Contextual Precision",
                 "Contextual Recall",
                 "Contextual Relevancy",
                 "Answer Relevancy",
                 "Faithfulness",
                 "Hallucination",
-            ],
-            "metric_type": ["retrieval", "retrieval", "retrieval", "generation", "generation", "generation"],
-        }
+                ],
+                "metric_type": ["retrieval", "retrieval", "retrieval", "generation", "generation", "generation"],
+                }
 
-        evaluation = (
-            pd.DataFrame.from_records(asdict(result) for result in self.eval_results)
-            .explode("metrics_metadata")
-            .reset_index(drop=True)
-            .assign(
-                metric_name=lambda df: df.metrics_metadata.apply(getattr, args=["metric"]),
-                score=lambda df: df.metrics_metadata.apply(getattr, args=["score"]),
-                reason=lambda df: df.metrics_metadata.apply(getattr, args=["reason"]),
+            evaluation = (
+                pd.DataFrame.from_records(asdict(result) for result in self.eval_results)
+                .explode("metrics_metadata")
+                .reset_index(drop=True)
+                .assign(
+                    metric_name=lambda df: df.metrics_metadata.apply(getattr, args=["metric"]),
+                    score=lambda df: df.metrics_metadata.apply(getattr, args=["score"]),
+                    reason=lambda df: df.metrics_metadata.apply(getattr, args=["reason"]),
+                )
+                .merge(pd.DataFrame(metric_type), on="metric_name")
+                .drop(columns=["success", "metrics_metadata"])
             )
-            .merge(pd.DataFrame(metric_type), on="metric_name")
-            .drop(columns=["success", "metrics_metadata"])
-        )
 
-        evaluation.to_csv(f"{self.V_RESULTS}/{self.experiment_name}_val_results.csv", index=False)
-        evaluation.head()
+            evaluation.to_csv(f"{self.V_RESULTS}/{self.experiment_name}_val_results.csv", index=False)
+
+            evaluation.head()
 
     def load_experiment_param_data(
         self,
@@ -380,7 +442,12 @@ class GetExperimentResults:
             self.retrieval_question_prompt = row["retrieval_question_prompt"]
 
             self.write_rag_results()
-            self.do_evaluation()
+
+            if self.knowledge_retention:
+                self.do_knowledge_retention_evaluation()
+            else:
+                self.do_evaluation()
+
             self.write_evaluation_results()
 
     def empirical_ci(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -408,21 +475,24 @@ class GetExperimentResults:
         This function uses the stored experiment result to save the aggregated metics using empirical_ci().
         It also saves a barplot (here confidence intervals are calculated by bootstrapping).
         """
-        experiments = []
-        experiment_names = self.experiment_parameters["experiment_name"]
-        for experiment_name in experiment_names:
-            experiment = pd.read_csv(f"{self.V_RESULTS}/{self.experiment_name}_val_results.csv")
-            experiment["experiment_name"] = experiment_name
-            experiments.append(experiment)
+        if self.knowledge_retention == False:
+            experiments = []
+            experiment_names = self.experiment_parameters["experiment_name"]
+            for experiment_name in experiment_names:
+                experiment = pd.read_csv(f"{self.V_RESULTS}/{self.experiment_name}_val_results.csv")
+                experiment["experiment_name"] = experiment_name
+                experiments.append(experiment)
 
-        experiments_df = pd.concat(experiments)
+            experiments_df = pd.concat(experiments)
 
-        barplot = sns.barplot(experiments_df, x="score", y="metric_name", hue="experiment_name", errorbar=("ci", 95))
-        fig = barplot.get_figure()
-        fig.savefig(f"{self.V_RESULTS}/{self.experiment_file_name}_boxplot.png", bbox_inches="tight")
+            barplot = sns.barplot(experiments_df, x="score", y="metric_name", hue="experiment_name", errorbar=("ci", 95))
+            fig = barplot.get_figure()
+            fig.savefig(f"{self.V_RESULTS}/{self.experiment_file_name}_boxplot.png", bbox_inches="tight")
 
-        experiment_metrics = self.empirical_ci(experiments_df)
-        experiment_metrics.to_csv(f"{self.V_RESULTS}/{self.experiment_file_name}_eval_results_full.csv")
+            experiment_metrics = self.empirical_ci(experiments_df)
+            experiment_metrics.to_csv(f"{self.V_RESULTS}/{self.experiment_file_name}_eval_results_full.csv")
+        else: 
+            pass
 
 
 @click.command()
@@ -441,8 +511,15 @@ class GetExperimentResults:
 @click.option(
     "--benchmark", "-b", required=False, is_flag=True, help="Use the baseline rag function to get benchmarking results."
 )
-def main(data_version, experiment_file_name, benchmark):
-    get_experiment_results = GetExperimentResults()
+@click.option(
+    "--knowledge_retention",
+    required=False,
+    type=bool,
+    help="Specify whether you are evaluating for knowledge retention. This requiries an appropriate testset CSV (not RAGAS generated)."
+)
+
+def main(data_version, experiment_file_name, benchmark, knowledge_retention):
+    get_experiment_results = GetExperimentResults(knowledge_retention=knowledge_retention)
     get_experiment_results.set_data_version(data_version)
     get_experiment_results.load_experiment_param_data(experiment_file_name=experiment_file_name, benchmark=benchmark)
     get_experiment_results.load_chunks_from_jsonl_to_index()
