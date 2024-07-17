@@ -1,3 +1,4 @@
+import glob
 import inspect
 import os
 import re
@@ -8,25 +9,26 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from regex import D
 from wordcloud import STOPWORDS, WordCloud
 
 
 class ChatHistoryAnalysis():
     def __init__(self) -> None:
         root = Path(__file__).parents[2]
-        evaluation_dir = root / "notebooks/evaluation"
-        results_dir = f'{evaluation_dir}/results'
+        self.evaluation_dir = root / "notebooks/evaluation"
+        results_dir = f'{self.evaluation_dir}/results'
         self.visualisation_dir = f'{results_dir}/visualisations/'
         self.table_dir = f'{results_dir}/table/'
         os.makedirs(results_dir, exist_ok=True)
         os.makedirs(self.visualisation_dir, exist_ok=True)
         os.makedirs(self.table_dir, exist_ok=True)
 
-        # data load
-        file_path = f'{evaluation_dir}/data/chat_histories/chat_history_17_07_2024.csv' # TODO - implement function to fetch chat_history with specified date/latest date
+        # IMPORTANT - For this to work you must save your chat history CSV dump in notebooks/evaluation/data/chat_histories 
+        file_path = self.latest_chat_history_file()
         self.chat_logs = pd.read_csv(file_path)
 
-        # slimming it to specific columns and converting to timestamp that can be read properly
+        # Select specific columns and converting to readable timestamp
         self.chat_logs = self.chat_logs[['created_at', 'users', 'chat_history', 'text', 'role']]
         self.chat_logs['created_at'] = pd.to_datetime(self.chat_logs['created_at'])
 
@@ -37,6 +39,10 @@ class ChatHistoryAnalysis():
         self.ai_responses['tokens'] = self.ai_responses['text'].apply(self.preprocess_text)
         self.user_responses['tokens'] = self.user_responses['text'].apply(self.preprocess_text)
 
+    def latest_chat_history_file(self):
+        chat_history_folder = glob.glob(f'{self.evaluation_dir}/data/chat_histories/*')
+        latest_file = max(chat_history_folder, key=os.path.getctime)
+        return latest_file
 
     def preprocess_text(self, text):
         tokens = text.split()
