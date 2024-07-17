@@ -1,9 +1,6 @@
 import inspect
-from itertools import count
 import os
 import re
-import string
-import sys
 import textwrap
 from collections import Counter
 from pathlib import Path
@@ -11,7 +8,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-from matplotlib import table
 from wordcloud import STOPWORDS, WordCloud
 
 

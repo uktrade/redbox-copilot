@@ -2857,16 +2857,6 @@ files = [
 ]
 
 [[package]]
-name = "ifilter"
-version = "0.2"
-description = "ifilter is a command line tool for interactive filtering of pipes."
-optional = false
-python-versions = "*"
-files = [
-    {file = "ifilter-0.2.tar.gz", hash = "sha256:0e96e67c3372d6d5a589a5a184549096986fa9cc2c89cf2f8b56a0d7eed2daaa"},
-]
-
-[[package]]
 name = "importlib-metadata"
 version = "7.1.0"
 description = "Read metadata from Python packages"
@@ -10301,4 +10291,4 @@ test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", 
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<3.12"
-content-hash = "e8cf22a59b119d11937ce98b62159107ede021b88e434daf0aafce08c8ba05b0"
+content-hash = "f5553c27aad076b749dc8a44ce4e26eaa01c1d5b53501d98b93d44c4dd069cbf"
