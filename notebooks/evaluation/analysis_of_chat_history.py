@@ -7,11 +7,13 @@ from collections import Counter
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import pandas as pd
 import seaborn as sns
+import numpy as np
 from regex import D
 from wordcloud import STOPWORDS, WordCloud
-
+from bertopic import BERTopic
 
 class ChatHistoryAnalysis():
     def __init__(self) -> None:
@@ -39,6 +41,13 @@ class ChatHistoryAnalysis():
         self.ai_responses['tokens'] = self.ai_responses['text'].apply(self.preprocess_text)
         self.user_responses['tokens'] = self.user_responses['text'].apply(self.preprocess_text)
 
+        self.topic_model = None
+        self.topic_model_over_time = None
+
+        mpl.rcParams.update({'font.size': 10})
+        mpl.rcParams.update({'font.family': 'Arial'})
+        self.figsize = (10, 5)
+
     def latest_chat_history_file(self):
         chat_history_folder = glob.glob(f'{self.evaluation_dir}/data/chat_histories/*')
         latest_file = max(chat_history_folder, key=os.path.getctime)
@@ -54,7 +63,6 @@ class ChatHistoryAnalysis():
         user_counts = self.chat_logs['users'].value_counts()
 
         user_name = [user_email.split('@')[0].replace('.', ' ').title() for user_email in user_counts.index]
-
         wrapped_user_name = ['\n'.join(textwrap.wrap(name, width=10)) for name in user_name]
 
         # Table
@@ -63,7 +71,7 @@ class ChatHistoryAnalysis():
         table_dataframe.to_csv(f'{self.table_dir}top_users.csv', index=False)
 
         # Barplot
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=self.figsize)
         sns.barplot(x=wrapped_user_name, y=user_counts.values, palette='viridis')
 
         plt.xticks(ha='right', size=9)
@@ -85,7 +93,7 @@ class ChatHistoryAnalysis():
         table_dataframe.to_csv(f'{self.table_dir}usage_of_redbox_ai_over_time.csv', index=False)
 
         # Line graph
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=self.figsize)
         date_counts.plot(kind='line')
         plt.title('Usage of Redbox AI Over Time')
         plt.xlabel('Date')
@@ -111,7 +119,7 @@ class ChatHistoryAnalysis():
         table_dataframe.to_csv(f'{self.table_dir}user_most_frequent_words_table.csv', index=False)
 
         # Barplot
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=self.figsize)
         sns.barplot(x=list(counts), y=list(words), palette='viridis')
         plt.title('Top 20 Most Frequent Words')
         plt.xlabel('Frequency')
@@ -121,7 +129,7 @@ class ChatHistoryAnalysis():
 
         # Wordcloud - TODO - assess value
         wordcloud = WordCloud(width=800, height=400, background_color='white').generate_from_frequencies(word_freq)
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=self.figsize)
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis('off')
         plt.title('Most Frequent Words')
@@ -140,7 +148,7 @@ class ChatHistoryAnalysis():
         table_dataframe.to_csv(f'{self.table_dir}ai_most_frequent_words_table.csv', index=False)
 
         # Barplot
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=self.figsize)
         sns.barplot(x=list(counts), y=list(words), palette='viridis')
         plt.title('Top 20 Most Frequent Words')
         plt.xlabel('Frequency')
@@ -150,7 +158,7 @@ class ChatHistoryAnalysis():
         
         # Wordcloud - TODO - assess value
         ai_wordcloud = WordCloud(width=800, height=400, background_color='white').generate_from_frequencies(ai_word_freq)
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=self.figsize)
         plt.imshow(ai_wordcloud, interpolation='bilinear')
         plt.axis('off')
         plt.title('Most Frequent Words in AI Responses')
@@ -172,7 +180,7 @@ class ChatHistoryAnalysis():
         table_dataframe.to_csv(f'{self.table_dir}common_ai_patterns.csv', index=False)
 
         # Barplot
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=self.figsize)
         sns.barplot(x=ai_response_patterns.values, y=ai_response_patterns.index, palette='magma')
         plt.title('Common Patterns in AI Responses')
         plt.xlabel('Frequency')
@@ -180,6 +188,71 @@ class ChatHistoryAnalysis():
         ai_patterns_path = os.path.join(self.visualisation_dir, 'common_ai_patterns.png')
         plt.savefig(ai_patterns_path)
 
+    # What routes are people using?
+    def route_analysis(self):
+
+        # Assign routes from text
+        self.user_responses['route'] = self.user_responses['text'].apply(lambda x: 'summarise' if x.startswith('@summarise') else ('chat' if x.startswith('@chat') else 'no_route'))
+        df = self.user_responses.copy()
+        
+        # # Some users repeat the same message several times (drop?)
+        # df = df.drop_duplicates(['text'])
+
+        # User names
+        user_name = [user_email.split('@')[0].replace('.', ' ').title() for user_email in df.users]
+        wrapped_user_name = ['\n'.join(textwrap.wrap(name, width=10)) for name in user_name]
+        df['user_name'] = wrapped_user_name
+
+        # Groupby routes
+        df_grouped = df.groupby(['user_name'])['route'].value_counts().unstack()
+
+        # Plot
+        plt.figure(figsize=self.figsize)
+        df_grouped.plot(kind='bar',
+                        color={"chat": "teal", 
+                               "no_route": "yellowgreen",
+                               "summarise": "gold"},
+                        figsize=self.figsize)
+        plt.xticks(rotation=0)
+        plt.xlabel('Users')
+        plt.ylabel('Number of routes taken')
+        plt.title('Routes taken per user')
+        routes_count_path = os.path.join(self.visualisation_dir, 'routes_per_user.png')
+        plt.savefig(routes_count_path)
+
+    # Are users asking about common topics?
+    def get_topics(self):
+            
+            STOPWORDS.add('@chat')
+            STOPWORDS.add('@summarise')
+
+             # Remove stopwords and fit topic model
+            text_without_stopwords = self.user_responses['text'].apply(lambda x: ' '.join([word for word in x.split() if word not in (STOPWORDS)]))
+            created_at = self.user_responses['created_at'].to_list()
+            topic_model = BERTopic(verbose=True)
+            topic_model.fit_transform(text_without_stopwords)
+            topics_over_time = topic_model.topics_over_time(text_without_stopwords, created_at)
+            
+            self.topic_model = topic_model
+            self.topics_over_time  = topics_over_time
+
+    def visualise_topics(self):
+
+        return self.topic_model.visualize_topics(width=800, height=500)
+    
+    def visualise_hierarchy(self):
+
+        return self.topic_model.visualize_hierarchy(width=800, height=400)
+    
+    def visualise_barchart(self):
+
+        return self.topic_model.visualize_barchart(width=800, height=400)
+    
+    def visualise_topics_over_time(self):
+
+        return self.topic_model.visualize_topics_over_time(self.topics_over_time,
+                                                           top_n_topics = 5,
+                                                           normalize_frequency=True)
 
 def main():
     chat_history_analysis = ChatHistoryAnalysis()
