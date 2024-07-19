@@ -3,15 +3,15 @@ import streamlit as st
 
 st.set_page_config(page_title = 'Redbox Chat Analysis', layout = 'centered')
 st.set_option('deprecation.showPyplotGlobalUse', False)
-
 st.title('Redbox Chat History Dashboard')
 
-user_freq_tab, traffic_tab, word_freq_tab, ai_word_freq_tab, route_tab, topic_tab = st.tabs(['User frequency',
-                                                                                  'Redbox traffic',
-                                                                                  'Word frequency',
-                                                                                  'AI word frequency',
-                                                                                  'Route analysis',
-                                                                                  'Topic modelling'])
+user_freq_tab, traffic_tab, word_freq_tab, ai_word_freq_tab, route_tab, transitions_tab, topic_tab = st.tabs(['User frequency',
+                                                                                                            'Redbox traffic',
+                                                                                                            'Word frequency',
+                                                                                                            'AI word frequency',
+                                                                                                            'Route analysis',
+                                                                                                            'Route transitions',
+                                                                                                            'Topic modelling'])
 
 cha = ChatHistoryAnalysis()
 
@@ -30,9 +30,11 @@ with ai_word_freq_tab:
 with route_tab:
     st.pyplot(cha.route_analysis())
 
-with topic_tab:
-    with st.spinner('Getting topics...'):
+with transitions_tab:
+    st.pyplot(cha.route_transitions())
 
+with topic_tab:
+    with st.spinner('Fitting topic model...'):
         cha.get_topics()
     
     st.plotly_chart(cha.visualise_topics())

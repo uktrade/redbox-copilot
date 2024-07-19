@@ -31,7 +31,7 @@ class ChatHistoryAnalysis():
         self.chat_logs = pd.read_csv(file_path)
 
         # Select specific columns and converting to readable timestamp
-        self.chat_logs = self.chat_logs[['created_at', 'users', 'chat_history', 'text', 'role']]
+        self.chat_logs = self.chat_logs[['created_at', 'users', 'chat_history', 'text', 'role', 'id']]
         self.chat_logs['created_at'] = pd.to_datetime(self.chat_logs['created_at'])
 
         self.ai_responses = self.chat_logs[self.chat_logs['role'] == 'ai']
@@ -41,12 +41,14 @@ class ChatHistoryAnalysis():
         self.ai_responses['tokens'] = self.ai_responses['text'].apply(self.preprocess_text)
         self.user_responses['tokens'] = self.user_responses['text'].apply(self.preprocess_text)
 
+        self.user_responses['route'] = self.user_responses['text'].apply(lambda row: 'summarise' if row.startswith('@summarise') else ('chat' if row.startswith('@chat') else 'no_route'))
+
         self.topic_model = None
         self.topic_model_over_time = None
 
+        self.figsize = (10, 5)
         mpl.rcParams.update({'font.size': 10})
         mpl.rcParams.update({'font.family': 'Arial'})
-        self.figsize = (10, 5)
 
     def latest_chat_history_file(self):
         chat_history_folder = glob.glob(f'{self.evaluation_dir}/data/chat_histories/*')
@@ -191,8 +193,6 @@ class ChatHistoryAnalysis():
     # What routes are people using?
     def route_analysis(self):
 
-        # Assign routes from text
-        self.user_responses['route'] = self.user_responses['text'].apply(lambda x: 'summarise' if x.startswith('@summarise') else ('chat' if x.startswith('@chat') else 'no_route'))
         df = self.user_responses.copy()
         
         # # Some users repeat the same message several times (drop?)
@@ -220,36 +220,63 @@ class ChatHistoryAnalysis():
         routes_count_path = os.path.join(self.visualisation_dir, 'routes_per_user.png')
         plt.savefig(routes_count_path)
 
+    def get_route_transitions(self, df):
+
+        # TODO Check this works with the groupby ID and time order of events
+        df['next_route'] = df['route'].shift(1)
+
+        df['transition'] = df.apply(lambda row: f"{row['route']} to {row['next_route']}"
+                                        if pd.notna(row['next_route']) else None, axis=1)
+            
+        return df
+
+    # In what way are users switching between routes?
+    def route_transitions(self):
+
+        # Get route transitions and counts per user session (is 'id' appropriate?)
+        df_transitions = self.user_responses.groupby('id').apply(self.get_route_transitions).reset_index(drop=True)
+
+        transition_counts = df_transitions['transition'].value_counts().reset_index()
+
+        # Plot
+        sns.barplot(x=transition_counts['transition'], y=transition_counts['count'],
+                    palette='viridis')
+        plt.xticks(rotation=45, ha='right')
+        plt.title('Number of different route transitions')
+        plt.xlabel('Route transition')
+        plt.ylabel('Number of route transitions')
+
     # Are users asking about common topics?
     def get_topics(self):
             
-            STOPWORDS.add('@chat')
-            STOPWORDS.add('@summarise')
+        STOPWORDS.add('@chat')
+        STOPWORDS.add('@summarise')
 
-             # Remove stopwords and fit topic model
-            text_without_stopwords = self.user_responses['text'].apply(lambda x: ' '.join([word for word in x.split() if word not in (STOPWORDS)]))
-            created_at = self.user_responses['created_at'].to_list()
-            topic_model = BERTopic(verbose=True)
-            topic_model.fit_transform(text_without_stopwords)
-            topics_over_time = topic_model.topics_over_time(text_without_stopwords, created_at)
-            
-            self.topic_model = topic_model
-            self.topics_over_time  = topics_over_time
+        # Remove stopwords and fit (simple) topic model
+        text_without_stopwords = self.user_responses['text'].apply(lambda row: ' '.join([word for word in row.split() if word not in (STOPWORDS)]))
+        created_at = self.user_responses['created_at'].to_list()
+        
+        topic_model = BERTopic(verbose=True)
+        topic_model.fit_transform(text_without_stopwords)
+        topics_over_time = topic_model.topics_over_time(text_without_stopwords, created_at)
+        
+        self.topic_model = topic_model
+        self.topics_over_time  = topics_over_time
 
     def visualise_topics(self):
-
+        # Plot
         return self.topic_model.visualize_topics(width=800, height=500)
     
     def visualise_hierarchy(self):
-
+        # Plot
         return self.topic_model.visualize_hierarchy(width=800, height=400)
     
     def visualise_barchart(self):
-
+        # Plot
         return self.topic_model.visualize_barchart(width=800, height=400)
     
     def visualise_topics_over_time(self):
-
+        # Plot
         return self.topic_model.visualize_topics_over_time(self.topics_over_time,
                                                            top_n_topics = 5,
                                                            normalize_frequency=True)
