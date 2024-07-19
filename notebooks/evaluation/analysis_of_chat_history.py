@@ -48,6 +48,24 @@ class ChatHistoryAnalysis():
         tokens = text.split()
         tokens = [word.lower() for word in tokens if word.isalpha()]
         return tokens
+    
+    def table_dataframe(self, data, file_name, sort_value=None, index=None):
+        if index:
+            table_dataframe = pd.DataFrame(data=data, index=index)
+        elif sort_value:
+            table_dataframe = pd.DataFrame(data=data).sort_values(sort_value, ascending=False)
+        else:
+            table_dataframe = pd.DataFrame(data=data)
+        table_dataframe.to_csv(f'{self.table_dir}{file_name}.csv', index=False)
+    
+    def plot_bar_graph(self, title, x, y, x_label, y_label, file_name):
+        plt.figure(figsize=(10, 5))
+        sns.barplot(x=x, y=y, palette='viridis')
+        plt.title(title)
+        plt.xlabel(x_label)
+        plt.ylabel(y_label)
+        barplot_path = os.path.join(self.visualisation_dir, file_name)
+        plt.savefig(barplot_path)
 
     # 1) Who uses Redbox the most?
     def user_frequency_analysis(self):
@@ -57,10 +75,7 @@ class ChatHistoryAnalysis():
 
         wrapped_user_name = ['\n'.join(textwrap.wrap(name, width=10)) for name in user_name]
 
-        # Table
-        table_data = {'Name': user_name, 'Email': user_counts.index, 'Number of times used': user_counts.values}
-        table_dataframe = pd.DataFrame(data=table_data, index=user_name)
-        table_dataframe.to_csv(f'{self.table_dir}top_users.csv', index=False)
+        self.table_dataframe(data={'Name': user_name, 'Email': user_counts.index, 'Number of times used': user_counts.values}, index=user_name, file_name='top_users')
 
         # Barplot
         plt.figure(figsize=(10, 5))
@@ -80,10 +95,8 @@ class ChatHistoryAnalysis():
         date_counts = self.chat_logs['date'].value_counts().sort_index()
 
         # Table
-        table_data = {'Date': date_counts.index, 'Usage': date_counts.values}
-        table_dataframe = pd.DataFrame(data=table_data)
-        table_dataframe.to_csv(f'{self.table_dir}usage_of_redbox_ai_over_time.csv', index=False)
-
+        self.table_dataframe(data={'Date': date_counts.index, 'Usage': date_counts.values}, file_name='usage_of_redbox_ai_over_time')
+        
         # Line graph
         plt.figure(figsize=(10, 5))
         date_counts.plot(kind='line')
@@ -105,19 +118,9 @@ class ChatHistoryAnalysis():
         most_common_words = word_freq.most_common(20)  #TODO - determine how many common words we want and the right vis. for this
         words, counts = zip(*most_common_words)
 
-        # Table
-        table_data = {'Word': list(word_freq.keys()), 'Frequency': list(word_freq.values())}
-        table_dataframe = pd.DataFrame(data=table_data).sort_values('Frequency', ascending=False)
-        table_dataframe.to_csv(f'{self.table_dir}user_most_frequent_words_table.csv', index=False)
+        self.table_dataframe(data={'Word': list(word_freq.keys()), 'Frequency': list(word_freq.values())}, file_name='user_most_frequent_words_table', sort_value='Frequency')
 
-        # Barplot
-        plt.figure(figsize=(10, 5))
-        sns.barplot(x=list(counts), y=list(words), palette='viridis')
-        plt.title('Top 20 Most Frequent Words')
-        plt.xlabel('Frequency')
-        plt.ylabel('Words')
-        barplot_path = os.path.join(self.visualisation_dir, 'user_most_frequent_words_barplot.png')
-        plt.savefig(barplot_path)
+        self.plot_bar_graph('Top 20 Most Frequent Words', list(counts), list(words), 'Frequency', 'Words', 'user_most_frequent_words_barplot.png')
 
         # Wordcloud - TODO - assess value
         wordcloud = WordCloud(width=800, height=400, background_color='white').generate_from_frequencies(word_freq)
@@ -134,19 +137,8 @@ class ChatHistoryAnalysis():
         most_common_words = ai_word_freq.most_common(20)  #TODO - determine how many common words we want and the right vis. for this
         words, counts = zip(*most_common_words)
 
-        # Table
-        table_data = {'Word': list(ai_word_freq.keys()), 'Frequency': list(ai_word_freq.values())}
-        table_dataframe = pd.DataFrame(data=table_data).sort_values('Frequency', ascending=False)
-        table_dataframe.to_csv(f'{self.table_dir}ai_most_frequent_words_table.csv', index=False)
-
-        # Barplot
-        plt.figure(figsize=(10, 5))
-        sns.barplot(x=list(counts), y=list(words), palette='viridis')
-        plt.title('Top 20 Most Frequent Words')
-        plt.xlabel('Frequency')
-        plt.ylabel('Words')
-        barplot_path = os.path.join(self.visualisation_dir, 'ai_most_frequent_words_barplot.png')
-        plt.savefig(barplot_path)
+        self.table_dataframe(data={'Word': list(ai_word_freq.keys()), 'Frequency': list(ai_word_freq.values())}, file_name='ai_most_frequent_words_table', sort_value='Frequency')
+        self.plot_bar_graph('Top 20 Most Frequent Words', list(counts), list(words), 'Frequency', 'Words', 'ai_most_frequent_words_barplot.png')
         
         # Wordcloud - TODO - assess value
         ai_wordcloud = WordCloud(width=800, height=400, background_color='white').generate_from_frequencies(ai_word_freq)
@@ -159,7 +151,7 @@ class ChatHistoryAnalysis():
 
     # 5) Is there a clear pattern behind AI responses?
     def ai_response_pattern_analysis(self):
-        def clean_text(text): # was including asterisks giving useless info to the graph I'm still not entirely convinced on the benefit of this analysis
+        def clean_text(text): # remove symbols from responses
             return re.sub('[!@#$*]', '', text).strip()
 
         self.ai_responses['clean_text'] = self.ai_responses['text'].apply(clean_text)
@@ -167,18 +159,8 @@ class ChatHistoryAnalysis():
         
         # Table
         words, counts = zip(*self.ai_responses['clean_text'].apply(lambda x: ' '.join(x.split()[:2])).value_counts())
-        table_data = {'Word': words, 'Frequency': counts}
-        table_dataframe = pd.DataFrame(data=table_data)
-        table_dataframe.to_csv(f'{self.table_dir}common_ai_patterns.csv', index=False)
-
-        # Barplot
-        plt.figure(figsize=(10, 5))
-        sns.barplot(x=ai_response_patterns.values, y=ai_response_patterns.index, palette='magma')
-        plt.title('Common Patterns in AI Responses')
-        plt.xlabel('Frequency')
-        plt.ylabel('Patterns')
-        ai_patterns_path = os.path.join(self.visualisation_dir, 'common_ai_patterns.png')
-        plt.savefig(ai_patterns_path)
+        self.table_dataframe(data={'Word': words, 'Frequency': counts}, file_name='common_ai_patterns', sort_value=None)
+        self.plot_bar_graph('Common Patterns in AI Responses', ai_response_patterns.values, ai_response_patterns.index, 'Frequency', 'Patterns', 'common_ai_patterns.png')
 
 
 def main():
