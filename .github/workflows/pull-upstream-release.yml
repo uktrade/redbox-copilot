@@ -28,7 +28,7 @@ jobs:
           echo "latest_tag=$latest_tag" >> $GITHUB_ENV
 
       - name: Create new branch if new release found
-        if: github.event_name == 'push'
+        if: github.event_name == 'schedule'
         run: |
           branch_name=upstream/release-${{ env.latest_tag }}
           echo branch_name: $branch_name
@@ -36,13 +36,3 @@ jobs:
           git push origin $branch_name
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Tag the new branch
-        run: |
-          git tag upstream/${{ env.latest_tag }} $branch_name
-          git push origin ${{ env.latest_tag }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-    
