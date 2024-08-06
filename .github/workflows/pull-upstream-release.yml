@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '0 8 * * *' # run every day at 8am
   workflow_dispatch:
+  push:
 
 jobs:
   check-upstream-release:
