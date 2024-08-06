@@ -25,13 +25,13 @@ jobs:
         run: |
           latest_tag=$(git describe --tags `git rev-list --tags --max-count=1`)
           echo "Latest tag: "upstream/release-$latest_tag"
-          echo "::set-output name=latest_tag::$latest_tag"
+          echo "latest_tag=$latest_tag" >> $GITHUB_ENV
 
       - name: Create new branch if new release found
         if: github.event_name == 'schedule'
         run: |
-          branch_name = "upstream/release-$latest_tag"
-          git checkout -b $branch_name upstream/release-$latest_tag
+          branch_name = "upstream/release-${{ env.latest_tag }}"
+          git checkout -b $branch_name
           git push origin $branch_name
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
