@@ -1,0 +1,37 @@
+name: Detect upstream release
+
+on:
+  schedule:
+    - cron: '0 8 * * *' # run every day at 8am
+  workflow_dispatch:
+
+jobs:
+  check-upstream-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      
+      - name: Fetch upstream release_version
+        run: |
+          git remote add upstream https://github.com/i-dot-ai/redbox.git 
+          git fetch upstream --tags
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Check for new release tag
+        id: check_tag
+        run: |
+          latest_tag=$(git describe --tags `git rev-list --tags --max-count=1`)
+          echo "Latest tag: $latest_tag"
+          echo "latest_tag=$latest_tag" >> $GITHUB_ENV
+
+      - name: Create new branch if new release found
+        if: github.event_name == 'schedule'
+        run: |
+          branch_name=upstream/release-${{ env.latest_tag }}
+          echo branch_name: $branch_name
+          git checkout -b $branch_name
+          git push origin $branch_name
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
