@@ -1,0 +1,14 @@
+[server]
+headless = true
+port = 8501
+enableXsrfProtection = false
+enableCORS = false
+address = "0.0.0.0"
+
+[logger]
+level = "info"
+messageFormat = "%(asctime)s - %(message)s"
+
+[browser]
+serverAddress = "redbox-sandbox.uktrade.digital/streamlit"
+serverPort = 8501

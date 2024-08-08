@@ -2,6 +2,8 @@ FROM python:3.11-buster as builder
 
 WORKDIR /app
 
+ENV PYTHONUNBUFFERED=1
+
 RUN pip install poetry
 
 ENV POETRY_NO_INTERACTION=1 \
@@ -20,13 +22,11 @@ RUN --mount=type=cache,target=$POETRY_CACHE_DIR poetry install --no-root --no-an
 WORKDIR /app/django_app
 RUN --mount=type=cache,target=$POETRY_CACHE_DIR poetry install --no-root --no-ansi
 
-WORKDIR /app
-
-COPY notebooks/evaluation/app.py /app/
-
 FROM python:3.11-slim as runtime
 
 WORKDIR /app
+
+COPY notebooks/evaluation/app.py /app/
 
 RUN apt-get update && apt-get install --yes libpq-dev curl > /dev/null
 
@@ -39,6 +39,8 @@ COPY --from=builder /app/.venv /app/.venv
 COPY notebooks/evaluation /app/notebooks/evaluation
 COPY --from=builder /app/django_app /app/django_app
 
+COPY notebooks/evaluation/.streamlit /app/.streamlit
+
 EXPOSE 8501
 
-ENTRYPOINT ["streamlit", "run", "notebooks/evaluation/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+ENTRYPOINT ["streamlit", "hello"]

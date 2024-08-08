@@ -388,9 +388,5 @@ class DemographicsView(UpdateView):
         return self.request.user
     
 
-@user_passes_test(lambda u: u.is_superuser)
 def streamlit_view(request):
-    context = {
-        'streamlit_host': settings.STREAMLIT_HOST
-    }
-    return render(request, 'streamlit_app.html', context)
+    return HttpResponse("Streamlit endpoint is configured.")
