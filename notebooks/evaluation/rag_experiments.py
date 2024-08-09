@@ -5,8 +5,10 @@ from operator import itemgetter
 from pathlib import Path
 from typing import Annotated
 
+import matplotlib.pyplot as plt
 import click
 import jsonlines
+from onnx import EXPERIMENTAL
 import pandas as pd
 import seaborn as sns
 from deepeval import evaluate
@@ -359,7 +361,7 @@ class GetExperimentResults:
             .drop(columns=["success", "metrics_metadata"])
         )
 
-        evaluation.to_csv(f"{self.V_RESULTS}/{self.experiment_name}_val_results.csv", index=False)
+        evaluation.to_csv(f"{self.V_RESULTS}/{self.experiment_name}_eval_results.csv", index=False)
         evaluation.head()
 
     def load_experiment_param_data(
@@ -398,20 +400,23 @@ class GetExperimentResults:
             self.write_rag_results()
             self.do_evaluation()
             self.write_evaluation_results()
-
-    def pass_rate(x):
-            return pd.Series({'pass_rate' : (round((x >= 0.5).mean(), 4)) * 100})
     
     def empirical_ci_and_pass_rate(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Calculate confidence intervals and pass rates for aggregated metrics.
         """
+
+        def pass_rate(x):
+                return pd.Series({'pass_rate' : (round((x >= 0.5).mean(), 4)) * 100})
     
         df_grouped = (
             df.groupby(["experiment_name", "metric_name"])["score"]
-            .agg(["mean", "sem", "min", "max", "count", self.pass_rate])
+            .agg(["mean", "sem", "min", "max", "count", pass_rate])
             .reset_index()
         )
+
+        # Pass-rate minus 1 for hallucination as lower values are better
+        df_grouped.loc[df_grouped['metric_name'] == 'Hallucination', 'pass_rate'] = 100 - df_grouped.loc[df_grouped['metric_name'] == 'Hallucination', 'pass_rate'] 
 
         ci = stats.t.interval(
             confidence=0.95, df=df_grouped["count"] - 1, loc=df_grouped["mean"], scale=df_grouped["sem"]
@@ -419,6 +424,12 @@ class GetExperimentResults:
 
         df_grouped["ci_low"] = ci[0]
         df_grouped["ci_high"] = ci[1]
+
+        # Sort metric names by input dataframe order
+        df_grouped['metric_name'] = pd.Categorical(df_grouped['metric_name'], 
+                                                df['metric_name'].unique())
+        
+        df_grouped.sort_values(['experiment_name', 'metric_name'], inplace = True)
 
         return df_grouped
 
@@ -430,23 +441,30 @@ class GetExperimentResults:
         experiments = []
         experiment_names = self.experiment_parameters["experiment_name"]
         for experiment_name in experiment_names:
-            experiment = pd.read_csv(f"{self.V_RESULTS}/{self.experiment_name}_val_results.csv")
+            experiment = pd.read_csv(f"{self.V_RESULTS}/{self.experiment_name}_eval_results.csv")
             experiment["experiment_name"] = experiment_name
             experiments.append(experiment)
 
         experiments_df = pd.concat(experiments)
 
-        barplot_scores = sns.barplot(experiments_df, x="score", y="metric_name", hue="experiment_name", errorbar=("ci", 95))
-        fig_scores = barplot_scores.get_figure()
-        fig_scores.savefig(f"{self.V_RESULTS}/{self.experiment_file_name}_barplot_scores.png", bbox_inches="tight")
-
         experiment_metrics = self.empirical_ci_and_pass_rate(experiments_df)
-
-        barplot_pass_rate = sns.barplot(experiment_metrics, x="pass_rate", y="metric_name", hue="experiment_name")
-        fig_pass_rate = barplot_pass_rate.get_figure()
-        fig_pass_rate.savefig(f"{self.V_RESULTS}/{self.experiment_file_name}_barplot_pass_rates.png", bbox_inches="tight")
-
         experiment_metrics.to_csv(f"{self.V_RESULTS}/{self.experiment_file_name}_eval_results_full.csv")
+
+        # Plot
+        fig, ax = plt.subplots(nrows = 2, figsize = (6, 8))
+
+        sns.barplot(experiments_df, x="score", y="metric_name", hue='experiment_name', errorbar=('ci', 95), ax = ax[0])
+        ax[0].set(xlabel = 'Mean score', ylabel = 'Metric name',  xlim = (0, 1))
+        ax[0].legend(title = '', fontsize = 9, loc = 'upper right')
+
+        sns.barplot(experiment_metrics, x="pass_rate", y="metric_name", hue="experiment_name", ax = ax[1])
+        ax[1].set(xlabel = 'Pass rate (%)', ylabel = 'Metric name', xlim = (0, 100))
+        ax[1].legend(title = '', fontsize = 9, loc = 'upper right')
+
+        plt.tight_layout()
+
+        plt.savefig(f"{self.V_RESULTS}/{self.experiment_file_name}_eval_barplots.png")
+
 
 
 class Mutex(click.Option):
