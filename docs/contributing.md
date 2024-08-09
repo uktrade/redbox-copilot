@@ -53,6 +53,18 @@ We will then take care of the issue as soon as possible.
 > ### Legal Notice
 > When contributing to this project, you must agree that you have authored 100% of the content, that you have the necessary rights to the content and that the content you contribute may be provided under the project license.
 
+### Branch strategy
+
+To maintain a well-organised and efficient workflow, we must adhere to a specific branching strategy.
+
+- The **main** branch should be reserved exclusively for production-ready code that has previously been tested in [the sandbox environment](https://redbox-sandbox.uktrade.digital/)
+- The **dev** branch is intended for changes that need to be tested in [the sandbox environment](https://redbox-sandbox.uktrade.digital/)
+
+### Pull requests
+
+- Each feature, bug fix or task should be on a **dedicated feature branch**, following [this convention](https://dev.to/varbsan/a-simplified-convention-for-naming-branches-and-commits-in-git-il4)
+- The **main** and **dev** branches are protected. This means all Pull Requests must be approved by at least one reviewer before merging.
+
 ### Reporting Bugs
 
 #### Before Submitting a Bug Report
