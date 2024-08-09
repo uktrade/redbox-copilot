@@ -21,7 +21,7 @@ ENVIRONMENT = Environment[env.str("ENVIRONMENT").upper()]
 WEBSOCKET_SCHEME = "ws" if ENVIRONMENT.is_test else "wss"
 LOGIN_METHOD = env.str("LOGIN_METHOD")
 
-if env.str("HOSTS"):
+if env.str("HOSTS", ""):
     env_hosts = env.str("HOSTS", "").split(",")
 else:
     env_hosts = ENVIRONMENT.hosts
@@ -40,7 +40,7 @@ STATIC_URL = "static/"
 STATIC_ROOT = "staticfiles/"
 STATICFILES_DIRS = [
     Path(BASE_DIR) / "static/",
-    Path(BASE_DIR) / "frontend/",
+    Path(BASE_DIR) / "frontend/dist/",
 ]
 STATICFILES_FINDERS = [
     "compressor.finders.CompressorFinder",
@@ -345,7 +345,6 @@ MAGIC_LINK = {
 
 IMPORT_FORMATS = [CSV]
 
-USE_STREAMING = env.bool("USE_STREAMING")
 CHAT_TITLE_LENGTH = 30
 FILE_EXPIRY_IN_SECONDS = env.int("FILE_EXPIRY_IN_DAYS") * 24 * 60 * 60
 SUPERUSER_EMAIL = env.str("SUPERUSER_EMAIL", None)
