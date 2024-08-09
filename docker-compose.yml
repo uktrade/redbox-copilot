@@ -29,21 +29,6 @@ services:
       retries: 24
       start_period: 60s
 
-  streamlit-app:
-    image: streamlit-app:latest
-    build:
-      context: .
-      dockerfile: ./notebooks/evaluation/Dockerfile
-    ports:
-      - "8501:8501"
-    networks:
-      - redbox-app-network
-    env_file:
-      - .env
-    volumes:
-      - ./notebooks/evaluation:/app/notebooks/evaluation
-
-
   db:
     image: postgres:13
     env_file:
@@ -229,4 +214,3 @@ volumes:
   redis:
     driver: local
   redis-insight:
-  streamlit-app:

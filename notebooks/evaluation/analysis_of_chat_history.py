@@ -13,28 +13,6 @@ from bertopic import BERTopic
 from django.db.models import F, Prefetch
 from wordcloud import STOPWORDS, WordCloud
 
-# packages = [
-#     "django-environ",
-#     "django-use-email-as-username",
-#     "psycopg2-binary",
-#     "django-magic-link",
-#     "django-single-session",
-#     "django-compressor",
-#     "django-import-export",
-#     "django-storages",
-#     "daphne",
-#     "django-allauth",
-# ]
-# import pip
-
-# for package in packages:
-# pip.main(["install", package])
-
-
-# django.setup()
-
-# from redbox_app.redbox_core.models import ChatHistory, ChatMessage
-
 
 class ChatHistoryAnalysis:
     def __init__(self) -> None:
