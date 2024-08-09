@@ -127,7 +127,7 @@ class GetExperimentResults:
                     body=chunk,
                 )
 
-                file_uuids.add(chunk["parent_file_uuid"])
+                file_uuids.add(chunk["metadata"]["parent_file_uuid"])
         self.FILE_UUIDS = file_uuids
         return file_uuids
 
@@ -229,8 +229,6 @@ class GetExperimentResults:
             dict_chunk = dict(chunk)
             filtered_chunk = {
                 "page_content": dict_chunk["page_content"],
-                "page_number": dict_chunk["metadata"]["page_number"],
-                "parent_file_uuid": dict_chunk["metadata"]["parent_file_uuid"],
             }
             filtered_chunks.append(filtered_chunk)
 
@@ -401,14 +399,17 @@ class GetExperimentResults:
             self.do_evaluation()
             self.write_evaluation_results()
 
-    def empirical_ci(self, df: pd.DataFrame) -> pd.DataFrame:
+    def pass_rate(x):
+            return pd.Series({'pass_rate' : (round((x >= 0.5).mean(), 4)) * 100})
+    
+    def empirical_ci_and_pass_rate(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Calculate confidence intervals for aggregated metrics.
+        Calculate confidence intervals and pass rates for aggregated metrics.
         """
-
+    
         df_grouped = (
             df.groupby(["experiment_name", "metric_name"])["score"]
-            .agg(["mean", "sem", "min", "max", "count"])
+            .agg(["mean", "sem", "min", "max", "count", self.pass_rate])
             .reset_index()
         )
 
@@ -423,7 +424,7 @@ class GetExperimentResults:
 
     def create_visualisation_plus_grouped_results(self):
         """
-        This function uses the stored experiment result to save the aggregated metics using empirical_ci().
+        This function uses the stored experiment result to save the aggregated metics using empirical_ci_and_pass_rate().
         It also saves a barplot (here confidence intervals are calculated by bootstrapping).
         """
         experiments = []
@@ -435,11 +436,16 @@ class GetExperimentResults:
 
         experiments_df = pd.concat(experiments)
 
-        barplot = sns.barplot(experiments_df, x="score", y="metric_name", hue="experiment_name", errorbar=("ci", 95))
-        fig = barplot.get_figure()
-        fig.savefig(f"{self.V_RESULTS}/{self.experiment_file_name}_boxplot.png", bbox_inches="tight")
+        barplot_scores = sns.barplot(experiments_df, x="score", y="metric_name", hue="experiment_name", errorbar=("ci", 95))
+        fig_scores = barplot_scores.get_figure()
+        fig_scores.savefig(f"{self.V_RESULTS}/{self.experiment_file_name}_barplot_scores.png", bbox_inches="tight")
 
-        experiment_metrics = self.empirical_ci(experiments_df)
+        experiment_metrics = self.empirical_ci_and_pass_rate(experiments_df)
+
+        barplot_pass_rate = sns.barplot(experiment_metrics, x="pass_rate", y="metric_name", hue="experiment_name")
+        fig_pass_rate = barplot_pass_rate.get_figure()
+        fig_pass_rate.savefig(f"{self.V_RESULTS}/{self.experiment_file_name}_barplot_pass_rates.png", bbox_inches="tight")
+
         experiment_metrics.to_csv(f"{self.V_RESULTS}/{self.experiment_file_name}_eval_results_full.csv")
 
 
