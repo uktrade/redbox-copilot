@@ -10,10 +10,13 @@ RUN pip install poetry
 ADD redbox-core/ /app/redbox-core
 ADD worker/ /app/worker
 ADD README.md /app/README.md
+ADD download_embedder.py /app/
 
 WORKDIR /app/worker
 
 RUN poetry install
+
+RUN poetry run python ../download_embedder.py --embedding_model ${EMBEDDING_MODEL}
 
 # Downlaod Sentence Tokenizer
 RUN poetry run python -m nltk.downloader punkt

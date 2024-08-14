@@ -1673,24 +1673,6 @@ elasticsearch = {version = ">=8.13.1,<9.0.0", extras = ["vectorstore-mmr"]}
 langchain-core = ">=0.1.50,<0.3"
 
 [[package]]
-name = "langchain-huggingface"
-version = "0.0.3"
-description = "An integration package connecting Hugging Face and LangChain"
-optional = false
-python-versions = "<4.0,>=3.8.1"
-files = [
-    {file = "langchain_huggingface-0.0.3-py3-none-any.whl", hash = "sha256:d6827adf3c7c8fcc0bca8c43c7e900c3bf68af9a1532a83d4b8ace137e02887e"},
-    {file = "langchain_huggingface-0.0.3.tar.gz", hash = "sha256:0637acf484c47323cf3dcc46745a93467f6955989af9b7c01e2382fe1b630aaf"},
-]
-
-[package.dependencies]
-huggingface-hub = ">=0.23.0"
-langchain-core = ">=0.1.52,<0.3"
-sentence-transformers = ">=2.6.0"
-tokenizers = ">=0.19.1"
-transformers = ">=4.39.0"
-
-[[package]]
 name = "langchain-openai"
 version = "0.1.21"
 description = "An integration package connecting OpenAI and LangChain"
@@ -3362,11 +3344,11 @@ elasticsearch = "^8.14.0"
 kneed = "^0.8.5"
 langchain = "^0.2.6"
 langchain-elasticsearch = "^0.2.2"
-langchain-huggingface = "^0.0.3"
 langchain_openai = "^0.1.9"
 pydantic = "^2.7.1"
 pydantic-settings = "^2.3.4"
 pytest-dotenv = "^0.5.2"
+sentence-transformers = "^3.0.1"
 tiktoken = "^0.7.0"
 
 [package.source]
@@ -5298,4 +5280,4 @@ test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", 
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12,<3.13"
-content-hash = "0659749482a626bb80e77eb560b7cd85d06b4ce847b44dd4cd82c239aeae25e6"
+content-hash = "4279df152392a8b6ff6e29b3e7f88b42fa4e44b3b43b0d21415563d7e8d3f9f9"
