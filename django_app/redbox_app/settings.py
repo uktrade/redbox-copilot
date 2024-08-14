@@ -206,7 +206,6 @@ CSRF_COOKIE_HTTPONLY = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_AGE = 60 * 60 * 24
-SESSION_COOKIE_SAMESITE = "Strict"
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 
 LOG_ROOT = "."
@@ -361,8 +360,11 @@ if LOGIN_METHOD == "sso":
     LOGIN_URL = reverse_lazy("authbroker_client:login")
     LOGIN_REDIRECT_URL = reverse_lazy("homepage")
 elif LOGIN_METHOD == "magic_link":
+    SESSION_COOKIE_SAMESITE = "Strict"
     LOGIN_REDIRECT_URL = "homepage"
     LOGIN_URL = "sign-in"
 else:
     LOGIN_REDIRECT_URL = "homepage"
     LOGIN_URL = "sign-in"
+
+REPO_OWNER = env.str("REPO_OWNER", "i-dot-ai")

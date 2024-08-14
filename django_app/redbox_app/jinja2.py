@@ -86,6 +86,7 @@ def environment(**options):
             "to_user_timezone": to_user_timezone,
             "environment": settings.ENVIRONMENT.value,
             "security": settings.MAX_SECURITY_CLASSIFICATION.value,
+            "repo_owner": settings.REPO_OWNER,
         }
     )
     env.globals.update(
@@ -97,6 +98,7 @@ def environment(**options):
             "to_user_timezone": to_user_timezone,
             "environment": settings.ENVIRONMENT.value,
             "security": settings.MAX_SECURITY_CLASSIFICATION.value,
+            "repo_owner": settings.REPO_OWNER,
         }
     )
     return env
