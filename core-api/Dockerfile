@@ -13,7 +13,7 @@ WORKDIR /app/core-api
 RUN pip install poetry
 RUN poetry install
 
-RUN type=cache poetry run python ../download_embedder.py --embedding_model ${EMBEDDING_MODEL}
+RUN type=cache poetry run python ../download_embedder.py --embedding_model "all-mpnet-base-v2"
 
 # Run FastAPI
 EXPOSE 5002
