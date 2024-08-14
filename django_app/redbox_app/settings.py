@@ -19,9 +19,9 @@ env = environ.Env()
 SECRET_KEY = env.str("DJANGO_SECRET_KEY")
 ENVIRONMENT = Environment[env.str("ENVIRONMENT").upper()]
 WEBSOCKET_SCHEME = "ws" if ENVIRONMENT.is_test else "wss"
-LOGIN_METHOD = env.str("LOGIN_METHOD")
+LOGIN_METHOD = env.str("LOGIN_METHOD", "magic_link")
 
-if env.str("HOSTS"):
+if env.str("HOSTS", ""):
     env_hosts = env.str("HOSTS", "").split(",")
 else:
     env_hosts = ENVIRONMENT.hosts
@@ -32,15 +32,13 @@ DEBUG = env.bool("DEBUG")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-COMPRESSION_ENABLED = env.bool("COMPRESSION_ENABLED")
-
 COMPRESS_PRECOMPILERS = (("text/x-scss", "django_libsass.SassCompiler"),)
 
 STATIC_URL = "static/"
 STATIC_ROOT = "staticfiles/"
 STATICFILES_DIRS = [
     Path(BASE_DIR) / "static/",
-    Path(BASE_DIR) / "frontend/",
+    Path(BASE_DIR) / "frontend/dist/",
 ]
 STATICFILES_FINDERS = [
     "compressor.finders.CompressorFinder",
@@ -72,8 +70,11 @@ INSTALLED_APPS = [
     "import_export",
 ]
 
+AUTH_USER_MODEL = "redbox_core.User"
+
 if LOGIN_METHOD == "sso":
     INSTALLED_APPS.append("authbroker_client")
+    # AUTH_USER_MODEL = "redbox_core.SSOUser"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -100,9 +101,6 @@ TEMPLATES = [
         ],
         "OPTIONS": {
             "environment": "redbox_app.jinja2.environment",
-            "context_processors": [
-                "redbox_app.context_processors.compression_enabled",
-            ],
         },
     },
     {
@@ -155,7 +153,6 @@ USE_I18N = True
 USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SITE_ID = 1
-AUTH_USER_MODEL = "redbox_core.User"
 ACCOUNT_EMAIL_VERIFICATION = "none"
 
 # CSP settings https://content-security-policy.com/
@@ -169,6 +166,8 @@ CSP_SCRIPT_SRC = (
     "'self'",
     "'sha256-GUQ5ad8JK5KmEWmROf3LZd9ge94daqNvd8xy9YS1iDw='",
     "plausible.io",
+    "eu.i.posthog.com",
+    "eu-assets.i.posthog.com",
 )
 CSP_OBJECT_SRC = ("'none'",)
 CSP_REQUIRE_TRUSTED_TYPES_FOR = ("'script'",)
@@ -178,8 +177,13 @@ CSP_FONT_SRC = (
 )
 CSP_STYLE_SRC = ("'self'",)
 CSP_FRAME_ANCESTORS = ("'none'",)
-CSP_FRAME_SRC = ("'self'", f"http://{env.str('STREAMLIT_HOST')}")
-CSP_CONNECT_SRC = ["'self'", f"wss://{env_hosts[0]}/ws/chat/", "plausible.io"]
+CSP_CONNECT_SRC = [
+    "'self'",
+    f"wss://{env_hosts[0]}/ws/chat/",
+    "plausible.io",
+    "eu.i.posthog.com",
+    "eu-assets.i.posthog.com",
+]
 
 # https://pypi.org/project/django-permissions-policy/
 PERMISSIONS_POLICY: dict[str, list] = {
@@ -344,7 +348,6 @@ MAGIC_LINK = {
 
 IMPORT_FORMATS = [CSV]
 
-USE_STREAMING = env.bool("USE_STREAMING")
 CHAT_TITLE_LENGTH = 30
 FILE_EXPIRY_IN_SECONDS = env.int("FILE_EXPIRY_IN_DAYS") * 24 * 60 * 60
 SUPERUSER_EMAIL = env.str("SUPERUSER_EMAIL", None)
@@ -367,3 +370,4 @@ else:
 REPO_OWNER = env.str("REPO_OWNER", "i-dot-ai")
 
 STREAMLIT_HOST = env.str("STREAMLIT_HOST")
+
