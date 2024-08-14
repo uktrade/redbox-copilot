@@ -6,11 +6,14 @@ RUN apt-get update && apt-get install --yes build-essential curl > /dev/null
 ADD redbox-core/ /app/redbox-core
 ADD core-api/ /app/core-api
 ADD README.md /app/README.md
+ADD download_embedder.py /app/
 
 WORKDIR /app/core-api
 
 RUN pip install poetry
 RUN poetry install
+
+RUN type=cache poetry run python ../download_embedder.py --embedding_model "all-mpnet-base-v2"
 
 # Run FastAPI
 EXPOSE 5002

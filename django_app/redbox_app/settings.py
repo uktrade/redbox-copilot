@@ -19,7 +19,7 @@ env = environ.Env()
 SECRET_KEY = env.str("DJANGO_SECRET_KEY")
 ENVIRONMENT = Environment[env.str("ENVIRONMENT").upper()]
 WEBSOCKET_SCHEME = "ws" if ENVIRONMENT.is_test else "wss"
-LOGIN_METHOD = env.str("LOGIN_METHOD")
+LOGIN_METHOD = env.str("LOGIN_METHOD", "magic_link")
 
 if env.str("HOSTS", ""):
     env_hosts = env.str("HOSTS", "").split(",")
@@ -74,7 +74,7 @@ AUTH_USER_MODEL = "redbox_core.User"
 
 if LOGIN_METHOD == "sso":
     INSTALLED_APPS.append("authbroker_client")
-    AUTH_USER_MODEL = "redbox_core.SSOUser"
+    # AUTH_USER_MODEL = "redbox_core.SSOUser"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -153,7 +153,6 @@ USE_I18N = True
 USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SITE_ID = 1
-AUTH_USER_MODEL = "redbox_core.User"
 ACCOUNT_EMAIL_VERIFICATION = "none"
 
 # CSP settings https://content-security-policy.com/
