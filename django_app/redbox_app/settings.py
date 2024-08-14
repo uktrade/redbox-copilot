@@ -366,5 +366,3 @@ elif LOGIN_METHOD == "magic_link":
 else:
     LOGIN_REDIRECT_URL = "homepage"
     LOGIN_URL = "sign-in"
-
-STREAMLIT_HOST = env.str("STREAMLIT_HOST", "")
