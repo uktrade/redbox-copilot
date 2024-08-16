@@ -64,7 +64,6 @@ other_urlpatterns = [
         name="check-demographics",
     ),
     path("demographics/", views.DemographicsView.as_view(), name="demographics"),
-    # path("streamlit/", views.streamlit_view, name="streamlit_view"),
 ]
 
 urlpatterns = (
