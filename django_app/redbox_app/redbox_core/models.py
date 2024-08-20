@@ -1,21 +1,21 @@
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import override
 
 import boto3
 from botocore.config import Config
 from django.conf import settings
+from django.contrib.auth.base_user import BaseUserManager as BaseSSOUserManager
+from django.contrib.auth.models import AbstractBaseUser, Group, PermissionsMixin
+from django.contrib.postgres.fields import ArrayField
+from django.core import validators
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django_use_email_as_username.models import BaseUser, BaseUserManager
 from jose import jwt
 from yarl import URL
-
-if settings.LOGIN_METHOD == "sso":
-    from django.contrib.auth.base_user import BaseUserManager
-    from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
-else:
-    from django_use_email_as_username.models import BaseUser, BaseUserManager
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +36,20 @@ class TimeStampedModel(models.Model):
         ordering = ["created_at"]
 
 
+def sanitise_string(string: str | None) -> str | None:
+    """We are seeing NUL (0x00) characters in user entered fields, and also in document citations.
+    We can't save these characters, so we need to sanitise them."""
+    return string.replace("\x00", "\ufffd") if string else string
+
+
 class BusinessUnit(UUIDPrimaryKeyBase):
     name = models.TextField(max_length=64, null=False, blank=False, unique=True)
 
     def __str__(self) -> str:  # pragma: no cover
         return f"{self.name}"
 
-class RedboxUserManager(BaseUserManager):
+
+class SSOUserManager(BaseSSOUserManager):
 
     use_in_migrations = True
 
@@ -50,8 +57,8 @@ class RedboxUserManager(BaseUserManager):
         """Create and save a User with the given email and password."""
         if not username:
             raise ValueError("The given email must be set")
-        #email = self.normalize_email(email)
-        User = self.model(email=email, **extra_fields)
+        # email = self.normalize_email(email)
+        User = self.model(email=username, **extra_fields)
         User.set_password(password)
         User.save(using=self._db)
         return User
@@ -74,6 +81,7 @@ class RedboxUserManager(BaseUserManager):
 
         return self._create_user(username, password, **extra_fields)
 
+
 class User(AbstractBaseUser, PermissionsMixin, UUIDPrimaryKeyBase):
     username = models.EmailField(unique=True, default="default@default.co.uk")
     password = models.CharField(default="fakepassword")
@@ -84,13 +92,31 @@ class User(AbstractBaseUser, PermissionsMixin, UUIDPrimaryKeyBase):
     is_active = models.BooleanField(default=True)
     is_superuser = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
-    business_unit = models.ForeignKey(BusinessUnit, null=True, blank=True, on_delete=models.SET_NULL)
+    business_unit = models.ForeignKey(
+        BusinessUnit, null=True, blank=True, on_delete=models.SET_NULL
+    )
     grade = models.CharField(null=True, blank=True, max_length=3)
     profession = models.CharField(null=True, blank=True, max_length=4)
+    name = models.CharField(null=True, blank=True)
+    ai_experience = models.CharField(
+        null=True,
+        blank=True,
+        max_length=25,
+    )
+    # To avoid clashing with User Model
+    user_permissions = models.ManyToManyField(
+        "auth.Permission",
+        verbose_name="user permissions",
+        blank=True,
+        related_name="sso_user_set",
+    )
+    groups = models.ManyToManyField(
+        Group, verbose_name="groups", blank=True, related_name="sso_user_set"
+    )
 
-    USERNAME_FIELD = 'username'
+    USERNAME_FIELD = "username"
     REQUIRED_FIELDS = []
-    objects = RedboxUserManager()
+    objects = SSOUserManager()
 
     def __str__(self) -> str:  # pragma: no cover
         return f"{self.email}"
@@ -103,7 +129,8 @@ class User(AbstractBaseUser, PermissionsMixin, UUIDPrimaryKeyBase):
         """the bearer token expected by the core-api"""
         user_uuid = str(self.id)
         bearer_token = jwt.encode({"user_uuid": user_uuid}, key=settings.SECRET_KEY)
-        return f"Bearer {bearer_token}"    
+        return f"Bearer {bearer_token}"
+
 
 # class User(BaseUser, UUIDPrimaryKeyBase):
 #     class UserGrade(models.TextChoices):
@@ -153,15 +180,48 @@ class User(AbstractBaseUser, PermissionsMixin, UUIDPrimaryKeyBase):
 #         VET = "VET", _("Veterinary")
 #         OT = "OT", _("Other")
 
+#     class AIExperienceLevel(models.TextChoices):
+#         CURIOUS_NEWCOMER = "Curious Newcomer", _("I haven't used Generative AI tools")
+#         CAUTIOUS_EXPLORER = "Cautious Explorer", _(
+#             "I have a little experience using Generative AI tools"
+#         )
+#         ENTHUSIASTIC_EXPERIMENTER = (
+#             "Enthusiastic Experimenter",
+#             _(
+#                 "I occasionally use Generative AI tools but am still experimenting with their capabilities"
+#             ),
+#         )
+#         EXPERIENCED_NAVIGATOR = (
+#             "Experienced Navigator",
+#             _(
+#                 "I use Generative AI tools regularly and have a good understanding of their strengths and limitations"
+#             ),
+#         )
+#         AI_ALCHEMIST = (
+#             "AI Alchemist",
+#             _(
+#                 "I have extensive experience with Generative AI tools and can leverage them effectively in various "
+#                 "contexts"
+#             ),
+#         )
+
 #     username = None
 #     verified = models.BooleanField(default=False, blank=True, null=True)
 #     invited_at = models.DateTimeField(default=None, blank=True, null=True)
 #     invite_accepted_at = models.DateTimeField(default=None, blank=True, null=True)
 #     last_token_sent_at = models.DateTimeField(editable=False, blank=True, null=True)
 #     password = models.CharField("password", max_length=128, blank=True, null=True)
-#     business_unit = models.ForeignKey(BusinessUnit, null=True, blank=True, on_delete=models.SET_NULL)
+#     business_unit = models.ForeignKey(
+#         BusinessUnit, null=True, blank=True, on_delete=models.SET_NULL
+#     )
 #     grade = models.CharField(null=True, blank=True, max_length=3, choices=UserGrade)
-#     profession = models.CharField(null=True, blank=True, max_length=4, choices=Profession)
+#     name = models.CharField(null=True, blank=True)
+#     ai_experience = models.CharField(
+#         null=True, blank=True, max_length=25, choices=AIExperienceLevel
+#     )
+#     profession = models.CharField(
+#         null=True, blank=True, max_length=4, choices=Profession
+#     )
 #     objects = BaseUserManager()
 
 #     def __str__(self) -> str:  # pragma: no cover
@@ -190,6 +250,9 @@ class StatusEnum(models.TextChoices):
     errored = "errored"
 
 
+INACTIVE_STATUSES = [StatusEnum.deleted, StatusEnum.errored, StatusEnum.unknown]
+
+
 class File(UUIDPrimaryKeyBase, TimeStampedModel):
     status = models.CharField(choices=StatusEnum.choices, null=False, blank=False)
     original_file = models.FileField(storage=settings.STORAGES["default"]["BACKEND"])
@@ -210,7 +273,8 @@ class File(UUIDPrimaryKeyBase, TimeStampedModel):
                 self.last_referenced = timezone.now()
         super().save(*args, **kwargs)
 
-    def delete(self, using=None, keep_parents=False):  # noqa: ARG002  # remove at Python 3.12
+    @override
+    def delete(self, using=None, keep_parents=False):
         #  Needed to make sure no orphaned files remain in the storage
         self.original_file.storage.delete(self.original_file.name)
         super().delete()
@@ -247,7 +311,9 @@ class File(UUIDPrimaryKeyBase, TimeStampedModel):
             return URL(url)
 
         if not self.original_file:
-            logger.error("attempt to access not existent file %s", self.pk)
+            logger.error(
+                "attempt to access non-existent file %s", self.pk, stack_info=True
+            )
             return None
 
         return URL(self.original_file.url)
@@ -255,7 +321,12 @@ class File(UUIDPrimaryKeyBase, TimeStampedModel):
     @property
     def name(self) -> str:
         # User-facing name
-        return self.original_file_name or self.original_file.name
+        try:
+            return self.original_file_name or self.original_file.name
+        except ValueError as e:
+            logger.exception(
+                "attempt to access non-existent file %s", self.pk, exc_info=e
+            )
 
     @property
     def unique_name(self) -> str:
@@ -290,6 +361,12 @@ class ChatHistory(UUIDPrimaryKeyBase, TimeStampedModel):
     def __str__(self) -> str:  # pragma: no cover
         return f"{self.name} - {self.users}"
 
+    def save(
+        self, force_insert=False, force_update=False, using=None, update_fields=None
+    ):
+        self.name = sanitise_string(self.name)
+        super().save(force_insert, force_update, using, update_fields)
+
 
 class ChatRoleEnum(models.TextChoices):
     ai = "ai"
@@ -301,9 +378,21 @@ class Citation(UUIDPrimaryKeyBase, TimeStampedModel):
     file = models.ForeignKey(File, on_delete=models.CASCADE)
     chat_message = models.ForeignKey("ChatMessage", on_delete=models.CASCADE)
     text = models.TextField(null=True, blank=True)
+    page_numbers = ArrayField(
+        models.PositiveIntegerField(),
+        null=True,
+        blank=True,
+        help_text="location of citation in document",
+    )
 
     def __str__(self):
         return f"{self.file}: {self.text or ''}"
+
+    def save(
+        self, force_insert=False, force_update=False, using=None, update_fields=None
+    ):
+        self.text = sanitise_string(self.text)
+        super().save(force_insert, force_update, using, update_fields)
 
 
 class ChatMessage(UUIDPrimaryKeyBase, TimeStampedModel):
@@ -311,14 +400,46 @@ class ChatMessage(UUIDPrimaryKeyBase, TimeStampedModel):
     text = models.TextField(max_length=32768, null=False, blank=False)
     role = models.CharField(choices=ChatRoleEnum.choices, null=False, blank=False)
     route = models.CharField(max_length=25, null=True, blank=True)
-    old_source_files = models.ManyToManyField(  # TODO (@gecBurton): delete me
-        # https://technologyprogramme.atlassian.net/browse/REDBOX-367
-        File,
-        related_name="chat_messages",
-        blank=True,
+    selected_files = models.ManyToManyField(
+        File, related_name="+", symmetrical=False, blank=True
     )
-    selected_files = models.ManyToManyField(File, related_name="+", symmetrical=False, blank=True)
     source_files = models.ManyToManyField(File, through=Citation)
 
     def __str__(self) -> str:  # pragma: no cover
         return f"{self.text} - {self.role}"
+
+    def save(
+        self, force_insert=False, force_update=False, using=None, update_fields=None
+    ):
+        self.text = sanitise_string(self.text)
+        super().save(force_insert, force_update, using, update_fields)
+
+
+class ChatMessageRating(TimeStampedModel):
+    chat_message = models.OneToOneField(
+        ChatMessage, on_delete=models.CASCADE, primary_key=True
+    )
+    rating = models.PositiveIntegerField(
+        validators=[validators.MinValueValidator(1), validators.MaxValueValidator(5)]
+    )
+    text = models.TextField(blank=True, null=True)
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.chat_message} - {self.rating} - {self.text}"
+
+    def save(
+        self, force_insert=False, force_update=False, using=None, update_fields=None
+    ):
+        self.text = sanitise_string(self.text)
+        super().save(force_insert, force_update, using, update_fields)
+
+
+class ChatMessageRatingChip(UUIDPrimaryKeyBase, TimeStampedModel):
+    rating = models.ForeignKey(ChatMessageRating, on_delete=models.CASCADE)
+    text = models.CharField(max_length=32)
+
+    class Meta:
+        unique_together = "rating", "text"
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.rating} - {self.text}"

@@ -1,14 +1,16 @@
 import argparse
 import logging
 
-from redbox.model_db import SentenceTransformerDB
+from redbox.embeddings.model import SentenceTransformerDB
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger()
 
 
 def download():
-    parser = argparse.ArgumentParser(description="Download Sentence Transformer Embedder")
+    parser = argparse.ArgumentParser(
+        description="Download Sentence Transformer Embedder"
+    )
     parser.add_argument(
         "--embedding_model",
         type=str,
