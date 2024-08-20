@@ -106,6 +106,19 @@ def get_llm(env: Annotated[Settings, Depends(get_env)]) -> ChatLiteLLM:
             max_tokens=env.llm_max_tokens,
             callbacks=[logger_callback],
         )
+    elif env.chat_backend == "bedrock":
+        log.info("Creating AWS Bedrock LLM Client")
+        log.info("api_base: %s", env.bedrock_endpoint)
+        log.info("llm_max_tokens: %i", env.llm_max_tokens)
+        log.info("Model: %i", env.bedrock_model)
+
+        llm = ChatLiteLLM(
+            model=env.bedrock_model,
+            streaming=True,
+            api_base=env.bedrock_endpoint,
+            max_tokens=env.llm_max_tokens,
+            callbacks=[logger_callback],
+        )
     else:
         msg = "Unknown LLM model specified or missing"
         log.exception(msg)

@@ -174,6 +174,8 @@ class Settings(BaseSettings):
     openai_model: str | None = None
     azure_openai_api_key: str = "NotAKey"
     azure_openai_endpoint: str | None = None
+    bedrock_endpoint: str = "bedrock.eu-west-2.amazonaws.com"
+    bedrock_model: str = "bedrock/meta.llama3-8b-instruct-v1:0"
 
     openai_api_version: str = "2023-12-01-preview"
     azure_api_version_embeddings: str = "2024-02-01"
@@ -191,7 +193,7 @@ class Settings(BaseSettings):
     embedding_openai_base_url: str | None = None
     embedding_openai_model: str = "text-embedding-ada-002"
 
-    chat_backend: Literal["azure", "openai"] = "azure"
+    chat_backend: Literal["azure", "openai", "bedrock"] = "azure"
 
     partition_strategy: Literal["auto", "fast", "ocr_only", "hi_res"] = "fast"
     clustering_strategy: Literal["full"] | None = None
