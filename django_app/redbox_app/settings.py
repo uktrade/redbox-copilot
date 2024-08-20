@@ -368,6 +368,3 @@ else:
     LOGIN_URL = "sign-in"
 
 REPO_OWNER = env.str("REPO_OWNER", "i-dot-ai")
-
-STREAMLIT_HOST = env.str("STREAMLIT_HOST")
-
