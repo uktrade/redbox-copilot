@@ -25,6 +25,7 @@ class Environment(StrEnum):
     DEV = ("DEV", False, ["redbox-dev.ai.cabinetoffice.gov.uk", *ADDITIONAL_HOSTS])
     PREPROD = ("PREPROD", False, ["redbox-preprod.ai.cabinetoffice.gov.uk", *ADDITIONAL_HOSTS])
     PROD = ("PROD", False, ["redbox.ai.cabinetoffice.gov.uk", *ADDITIONAL_HOSTS])
+    PRODUCTION = ("PRODUCTION", False, ["redbox-trial.uktrade.digital", *ADDITIONAL_HOSTS])
 
 
 class Classification(StrEnum):
