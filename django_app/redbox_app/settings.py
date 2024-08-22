@@ -163,6 +163,7 @@ CSP_DEFAULT_SRC = (
     "plausible.io",
     "https://www.google-analytics.com/",
     "https://region1.google-analytics.com/",
+    "https://www.googletagmanager.com/",
 )
 CSP_SCRIPT_SRC = (
     "'self'",
@@ -189,6 +190,9 @@ CSP_CONNECT_SRC = [
     "plausible.io",
     "eu.i.posthog.com",
     "eu-assets.i.posthog.com",
+    "https://www.google-analytics.com/",
+    "https://region1.google-analytics.com/",
+    "https://www.googletagmanager.com/",
 ]
 
 # https://pypi.org/project/django-permissions-policy/
