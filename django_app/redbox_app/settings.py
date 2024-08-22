@@ -161,6 +161,9 @@ CSP_DEFAULT_SRC = (
     "'self'",
     "s3.amazonaws.com",
     "plausible.io",
+    "https://www.google-analytics.com/",
+    "https://region1.google-analytics.com/",
+    "https://www.googletagmanager.com/",
 )
 CSP_SCRIPT_SRC = (
     "'self'",
@@ -168,6 +171,9 @@ CSP_SCRIPT_SRC = (
     "plausible.io",
     "eu.i.posthog.com",
     "eu-assets.i.posthog.com",
+    "https://tagmanager.google.com/",
+    "https://www.googletagmanager.com/",
+    "ajax.googleapis.com/",
 )
 CSP_OBJECT_SRC = ("'none'",)
 CSP_REQUIRE_TRUSTED_TYPES_FOR = ("'script'",)
@@ -175,7 +181,8 @@ CSP_FONT_SRC = (
     "'self'",
     "s3.amazonaws.com",
 )
-CSP_STYLE_SRC = ("'self'",)
+CSP_INCLUDE_NONCE_IN = ("script-src",)
+CSP_STYLE_SRC = ("'self'", "https://tagmanager.google.com/",)
 CSP_FRAME_ANCESTORS = ("'none'",)
 CSP_CONNECT_SRC = [
     "'self'",
@@ -183,6 +190,9 @@ CSP_CONNECT_SRC = [
     "plausible.io",
     "eu.i.posthog.com",
     "eu-assets.i.posthog.com",
+    "https://www.google-analytics.com/",
+    "https://region1.google-analytics.com/",
+    "https://www.googletagmanager.com/",
 ]
 
 # https://pypi.org/project/django-permissions-policy/
