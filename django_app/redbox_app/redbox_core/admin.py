@@ -173,6 +173,7 @@ class ChatHistoryAdmin(admin.ModelAdmin):
     list_filter = ["users"]
     date_hierarchy = "created_at"
     actions = ["export_as_csv"]
+    ordering = ["-created_at"]
 
 
 class CitationAdmin(admin.ModelAdmin):
