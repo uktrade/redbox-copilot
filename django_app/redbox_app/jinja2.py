@@ -5,11 +5,9 @@ import jinja2
 import pytz
 from compressor.contrib.jinja2ext import CompressorExtension
 from django.conf import settings
-from django.template.engine import Engine
 from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.timezone import template_localtime
-from django.utils.safestring import mark_safe
 from markdown_it import MarkdownIt
 
 # `js-default` setting required to sanitize inputs
@@ -68,7 +66,6 @@ def to_user_timezone(value):
     user_tz = pytz.timezone("Europe/London")
     return value.astimezone(user_tz).strftime("%H:%M %d/%m/%Y")
 
-
 def environment(**options):
     extra_options = {}
     env = jinja2.Environment(  # nosec: B701 # noqa: S701
@@ -79,21 +76,6 @@ def environment(**options):
             **extra_options,
         },
     )
-
-    def django_context_processor(request):
-        context = {}
-        engine = Engine.get_default()
-        for processor in engine.context_processors:
-            context.update(processor(request))
-        return context
-    
-
-    def render_with_context(template_name, context, request=None):
-        if request is not None:
-            context.update(django_context_processor(request))
-        template = env.get_template(template_name)
-        return mark_safe(template.render(context))
-    
 
     env.filters.update(
         {
@@ -117,7 +99,9 @@ def environment(**options):
             "environment": settings.ENVIRONMENT.value,
             "security": settings.MAX_SECURITY_CLASSIFICATION.value,
             "repo_owner": settings.REPO_OWNER,
-            "render_with_context": render_with_context,
+            "analytics_tag": settings.ANALYTICS_TAG,
+            "analytics_link": settings.ANALYTICS_LINK,
+
         }
     )
     return env

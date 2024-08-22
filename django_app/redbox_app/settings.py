@@ -113,8 +113,6 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-                "redbox_app.context_processors.analytics_tag",
-                "redbox_app.context_processors.analytics_link",
             ],
         },
     },
@@ -370,3 +368,5 @@ else:
     LOGIN_URL = "sign-in"
 
 REPO_OWNER = env.str("REPO_OWNER", "i-dot-ai")
+ANALYTICS_TAG = env.str("ANALYTICS_TAG")
+ANALYTICS_LINK = env.str("ANALYTICS_LINK")
