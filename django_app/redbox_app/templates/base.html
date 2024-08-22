@@ -1,4 +1,5 @@
 {% from "macros/iai-top-nav.html" import iaiTopNav %}
+{% set cspNonce=request.csp_nonce %}
 
 <!DOCTYPE html>
 <html lang="en" class="govuk-template">
@@ -28,16 +29,17 @@
   {% endif %}
 
   {% if environment | lower == "production" and repo_owner | lower == "uktrade" %}
+
   <!-- Google tag (gtag.js) -->
-  {% script type="application/javascript" async=True %}
-  <script async src="{{ analytics_link }}"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', '{{ analytics_tag }}');
+  <script async src="{{ analytics_link }}" nonce="{{ request.csp_nonce }}"></script>
+  <script nonce="{{ request.csp_nonce }}"> 
+    window.dataLayer = window.dataLayer || []; 
+    function gtag(){dataLayer.push(arguments);} 
+    gtag('js', new Date()); 
+
+    gtag('config', '{{ analytics_tag }}'); 
   </script>
-{% endscript %}
+
 {% endif %}
 
   {# Temporarily removed due to this adding inline styles, which our CSP doesn't allow
