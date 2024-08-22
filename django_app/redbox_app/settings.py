@@ -101,6 +101,9 @@ TEMPLATES = [
         ],
         "OPTIONS": {
             "environment": "redbox_app.jinja2.environment",
+            "extensions": [
+                "csp.extensions.NoncedScript",
+            ],
         },
     },
     {
@@ -114,6 +117,9 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
             ],
+            "libraries": {
+                "csp": "csp.templatetags.csp",
+            }
         },
     },
 ]
