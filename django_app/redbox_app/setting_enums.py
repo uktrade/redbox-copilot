@@ -32,6 +32,7 @@ class Environment(StrEnum):
     )  # noqa: S104 nosec: B104: Not in prod
     DEV = ("DEV", False, ["redbox-dev.ai.cabinetoffice.gov.uk", *ADDITIONAL_HOSTS])
     DEVELOPMENT = ("DEVELOPMENT", False, [*ADDITIONAL_HOSTS])
+    SANDBOX = ("SANDBOX", False, [*ADDITIONAL_HOSTS])
     PREPROD = (
         "PREPROD",
         False,
