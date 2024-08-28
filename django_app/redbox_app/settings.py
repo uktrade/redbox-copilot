@@ -21,6 +21,7 @@ ENVIRONMENT = Environment[env.str("ENVIRONMENT").upper()]
 WEBSOCKET_SCHEME = "ws" if ENVIRONMENT.is_test else "wss"
 LOGIN_METHOD = env.str("LOGIN_METHOD", "magic_link")
 
+# TODO remove and use, additional hosts variable
 if env.str("HOSTS", ""):
     env_hosts = env.str("HOSTS", "").split(",")
 else:
@@ -182,7 +183,10 @@ CSP_FONT_SRC = (
     "s3.amazonaws.com",
 )
 CSP_INCLUDE_NONCE_IN = ("script-src",)
-CSP_STYLE_SRC = ("'self'", "https://tagmanager.google.com/",)
+CSP_STYLE_SRC = (
+    "'self'",
+    "https://tagmanager.google.com/",
+)
 CSP_FRAME_ANCESTORS = ("'none'",)
 CSP_CONNECT_SRC = [
     "'self'",
