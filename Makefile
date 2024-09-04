@@ -124,7 +124,7 @@ docs-build:  ## Build documentation
 	poetry run mkdocs build
 
 # Docker
-AWS_ACCOUNT_ID=381491837320
+AWS_ACCOUNT_ID=REPLACE_ME
 
 AWS_REGION=eu-west-2
 APP_NAME=dbt
