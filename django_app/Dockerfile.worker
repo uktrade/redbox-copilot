@@ -52,6 +52,7 @@ COPY --from=npm-packages /src/node_modules/ frontend/node_modules/
 COPY --from=npm-packages /src/dist/ frontend/dist/
 COPY --from=poetry-packages /src/venv ./venv
 
+RUN poetry install
 RUN poetry run python ./download_embedder.py --embedding_model "all-mpnet-base-v2"
 
 ENV DJANGO_SETTINGS_MODULE='redbox_app.settings'
