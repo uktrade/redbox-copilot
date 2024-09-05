@@ -4,34 +4,36 @@ from django.contrib import admin
 from django.urls import include, path
 from magic_link import urls as magic_link_urls
 
-from .redbox_core import auth_views, info_views, views
+from .redbox_core import views
 
 auth_urlpatterns = [
     path("magic_link/", include(magic_link_urls)),
-    path("sign-in/", auth_views.sign_in_view, name="sign-in"),
+    path("sign-in/", views.sign_in_view, name="sign-in"),
     path(
         "sign-in-link-sent/",
-        auth_views.sign_in_link_sent_view,
+        views.sign_in_link_sent_view,
         name="sign-in-link-sent",
     ),
-    path("signed-out/", auth_views.signed_out_view, name="signed-out"),
+    path("signed-out/", views.signed_out_view, name="signed-out"),
 ]
 
 if settings.LOGIN_METHOD == "sso":
     auth_urlpatterns.append(path("auth/", include("authbroker_client.urls")))
 
 info_urlpatterns = [
-    path("privacy-notice/", info_views.privacy_notice_view, name="privacy-notice"),
+    path(
+        "privacy-notice/", views.info_views.privacy_notice_view, name="privacy-notice"
+    ),
     path(
         "accessibility-statement/",
-        info_views.accessibility_statement_view,
+        views.accessibility_statement_view,
         name="accessibility-statement",
     ),
-    path("support/", info_views.support_view, name="support"),
+    path("support/", views.support_view, name="support"),
 ]
 
 file_urlpatterns = [
-    path("documents/", views.documents_view, name="documents"),
+    path("documents/", views.DocumentView.as_view(), name="documents"),
     path("upload/", views.UploadView.as_view(), name="upload"),
     path("remove-doc/<uuid:doc_id>", views.remove_doc_view, name="remove-doc"),
 ]
@@ -42,7 +44,6 @@ chat_urlpatterns = [
     path(
         "chat/<uuid:chat_id>/title/", views.ChatsTitleView.as_view(), name="chat-titles"
     ),
-    path("post-message/", views.post_message, name="post-message"),
     path(
         "citations/<uuid:message_id>/", views.CitationsView.as_view(), name="citations"
     ),
@@ -51,7 +52,6 @@ chat_urlpatterns = [
 
 admin_urlpatterns = [
     path("admin/", admin.site.urls),
-    path("accounts/", include("allauth.urls")),
 ]
 
 other_urlpatterns = [
@@ -64,6 +64,13 @@ other_urlpatterns = [
         name="check-demographics",
     ),
     path("demographics/", views.DemographicsView.as_view(), name="demographics"),
+    path(
+        ".well-known/security.txt",
+        views.SecurityTxtRedirectView.as_view(),
+        name="security.txt",
+    ),
+    path("security", views.SecurityTxtRedirectView.as_view(), name="security"),
+    path("sitemap", views.misc_views.sitemap_view, name="sitemap"),
 ]
 
 urlpatterns = (

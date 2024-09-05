@@ -1,4 +1,5 @@
 import logging
+import os
 import string
 import subprocess
 from pathlib import Path
@@ -13,8 +14,8 @@ from yarl import URL
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 BASE_URL = URL("http://localhost:8090/")
 TEST_ROOT = Path(__file__).parent
@@ -94,11 +95,8 @@ def test_user_journey(page: Page, email_address: str):
 
     # Use specific routes
     for route, select_file, should_have_citation in [
-        ("chat", False, False),
-        ("chat", True, False),
         ("search", False, True),
         ("search", True, True),
-        ("info", False, False),
     ]:
         question = f"@{route} What do I need to install?"
         logger.info("Asking %r", question)

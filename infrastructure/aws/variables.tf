@@ -25,9 +25,16 @@ variable "developer_ips" {
 }
 
 variable "django_command" {
-  type        = string
-  default     = "delete_expired_data"
-  description = "Name of Django management to be run. Use with caution"
+  type = list(object({
+    command : string,
+    task_name : string,
+    schedule : optional(string),
+  }))
+  default = [
+    { command : "delete_expired_data", task_name : "delete", schedule : "cron(00 02 * * ? *)" }, # every day at 2-2:30am
+    { command : "reingest_files", task_name : "reingest" }                                       # manually triggered
+  ]
+  description = "An object describing the django command to run"
 }
 
 variable "django_secret_key" {
@@ -93,36 +100,120 @@ variable "internal_ips" {
   description = "IP's of No10 and CO"
 }
 
-variable "azure_openai_model" {
-  type        = string
-  default     = "gpt-3.5-turbo"
-  description = "OPENAI model to use"
-}
-
-variable "openai_api_key" {
+variable "embedding_openai_api_key" {
   type        = string
   sensitive   = true
   default     = null
   description = "OPENAI api key"
 }
 
-variable "openai_api_version" {
+variable "embedding_azure_openai_endpoint" {
+  type        = string
+  default     = null
+  description = "The base URL for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
+}
+
+variable "azure_openai_model" {
+  type        = string
+  default     = "gpt-3.5-turbo"
+  description = "OPENAI model to use"
+}
+
+
+variable "openai_api_version_35t" {
   type        = string
   default     = "2023-12-01-preview"
   description = "OPENAI API version"
 }
 
-variable "azure_openai_api_key" {
+variable "azure_openai_api_key_35t" {
   type        = string
   sensitive   = true
   default     = null
   description = "The API key for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
 }
 
-variable "azure_openai_endpoint" {
+variable "azure_openai_fallback_api_key_35t" {
+  type        = string
+  sensitive   = true
+  default     = null
+  description = "The API key for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
+}
+
+variable "azure_openai_endpoint_35t" {
   type        = string
   default     = null
   description = "The base URL for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
+}
+
+variable "azure_openai_fallback_endpoint_35t" {
+  type        = string
+  default     = null
+  description = "The base URL for your fallback Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
+}
+
+variable "openai_api_version_4t" {
+  type        = string
+  default     = "2023-12-01-preview"
+  description = "OPENAI API version"
+}
+
+variable "azure_openai_api_key_4t" {
+  type        = string
+  sensitive   = true
+  default     = null
+  description = "The API key for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
+}
+
+variable "azure_openai_fallback_api_key_4t" {
+  type        = string
+  sensitive   = true
+  default     = null
+  description = "The API key for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
+}
+
+variable "azure_openai_endpoint_4t" {
+  type        = string
+  default     = null
+  description = "The base URL for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
+}
+
+variable "azure_openai_fallback_endpoint_4t" {
+  type        = string
+  default     = null
+  description = "The base URL for your fallback Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
+}
+
+variable "openai_api_version_4o" {
+  type        = string
+  default     = "2023-12-01-preview"
+  description = "OPENAI API version"
+}
+
+variable "azure_openai_api_key_4o" {
+  type        = string
+  sensitive   = true
+  default     = null
+  description = "The API key for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
+}
+
+variable "azure_openai_fallback_api_key_4o" {
+  type        = string
+  sensitive   = true
+  default     = null
+  description = "The API key for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
+}
+
+variable "azure_openai_endpoint_4o" {
+  type        = string
+  default     = null
+  description = "The base URL for your Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
+}
+
+variable "azure_openai_fallback_endpoint_4o" {
+  type        = string
+  default     = null
+  description = "The base URL for your fallback Azure OpenAI resource.  You can find this in the Azure portal under your Azure OpenAI resource."
 }
 
 variable "project_name" {
@@ -150,6 +241,12 @@ variable "sentry_dsn" {
 
 variable "sentry_environment" {
   description = "The sentry environment to send sentry logs to"
+  type        = string
+  default     = null
+}
+
+variable "sentry_report_to_endpoint" {
+  description = "The sentry endpoint to which the Report-To header should refer"
   type        = string
   default     = null
 }
@@ -191,10 +288,22 @@ variable "publicly_accessible" {
   description = "Flag to determine if the database is publicly accessible"
 }
 
+variable "max_document_tokens" {
+  type        = number
+  default     = 1000000
+  description = "The maximum amount of document tokens the system will work with in a single request before it fails gracefully."
+}
+
 variable "context_window_size" {
   type        = number
-  default     = 8000
+  default     = 128000
   description = "The size of the AI's context window"
+}
+
+variable "llm_max_tokens" {
+  type        = number
+  default     = 1024
+  description = "LLM token length"
 }
 
 variable "rag_k" {
@@ -328,13 +437,6 @@ variable "summarisation_question_prompt" {
   description = "how to construct summarization"
 }
 
-
-variable "llm_max_tokens" {
-  type        = number
-  default     = 1024
-  description = "LLM token length"
-}
-
 variable "embedding_document_field_name" {
   type        = string
   default     = "azure_embedding"
@@ -343,32 +445,60 @@ variable "embedding_document_field_name" {
 
 variable "embedding_max_retries" {
   type        = number
-  default     = 10
+  default     = 1
   description = "Number of retries to external embedding services (rate limiting)"
 }
 
 variable "embedding_retry_min_seconds" {
   type        = number
-  default     = 5
+  default     = 120
   description = "Number of seconds to wait before retry to external embedding services (rate limiting)"
 }
 
 variable "embedding_retry_max_seconds" {
   type        = number
-  default     = 120
+  default     = 300
   description = "Maximum number of seconds to wait before retry to external embedding services (rate limiting)"
 }
 
 variable "worker_ingest_min_chunk_size" {
   type        = number
   default     = 600
-  description = "Minimum size of chunks to be produced by the worker"
+  description = "Normal chunk resolution. Minimum size of chunks to be produced by the worker"
 }
-
 
 variable "worker_ingest_max_chunk_size" {
   type        = number
   default     = 800
-  description = "Maximum size of chunks to be produced by the worker"
+  description = "Normal chunk resolution. Maximum size of chunks to be produced by the worker"
 }
 
+variable "worker_ingest_largest_chunk_size" {
+  type        = number
+  default     = 96000
+  description = "Largest chunk resolution. Maximum size of chunks to be produced by the worker"
+}
+
+variable "worker_ingest_largest_chunk_overlap" {
+  type        = number
+  default     = 0
+  description = "Largest chunk resolution. Size of overlap between chunks produced by the worker"
+}
+
+variable "django_queue_timeout" {
+  type        = number
+  default     = 300
+  description = "How long to wait for unstructured to complete task"
+}
+
+variable "django_queue_retry" {
+  type        = number
+  default     = 300
+  description = "How long to wait between retrying unstructured task"
+}
+
+variable "django_queue_max_attempts" {
+  type        = number
+  default     = 1
+  description = "How many attempts to run unstructured task"
+}

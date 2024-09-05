@@ -229,6 +229,16 @@ class MyDetailsPage(SignedInBasePage):
 class DocumentRow:
     filename: str
     status: str
+    completed: bool
+
+    @classmethod
+    def from_element(cls, element: Locator) -> "DocumentRow":
+        filename = element.locator(".iai-doc-list__cell--file-name").inner_text()
+        status = element.locator(".iai-doc-list__cell--status").inner_text()
+        completed = element.evaluate(
+            "element => element.closest('.iai-doc-list').classList.contains('iai-doc-list--complete')"
+        )
+        return cls(filename=filename, status=status, completed=completed)
 
 
 class DocumentsPage(SignedInBasePage):
@@ -246,13 +256,7 @@ class DocumentsPage(SignedInBasePage):
 
     @property
     def all_documents(self) -> list[DocumentRow]:
-        return [self._doc_from_element(element) for element in self.page.locator(".iai-doc-list__item").all()]
-
-    @staticmethod
-    def _doc_from_element(element: Locator) -> DocumentRow:
-        filename = element.locator(".iai-doc-list__cell--file-name").inner_text()
-        status = element.locator("file-status").inner_text()
-        return DocumentRow(filename=filename, status=status)
+        return [DocumentRow.from_element(element) for element in self.page.locator(".iai-doc-list__item").all()]
 
     def document_count(self) -> int:
         return len(self.all_documents)
@@ -260,7 +264,7 @@ class DocumentsPage(SignedInBasePage):
     def wait_for_documents_to_complete(self, retry_interval: int = 5, max_tries: int = 120):
         tries = 0
         while True:
-            if all(d.status == "Complete" for d in self.all_documents):
+            if all(d.completed for d in self.all_documents):
                 return
             if tries >= max_tries:
                 logger.error("documents: %s", self.all_documents)
@@ -307,7 +311,7 @@ class ChatMessage:
     chats_page: "ChatsPage" = field(repr=False)
 
     def navigate_to_citations(self) -> "CitationsPage":
-        self.element.locator("a.iai-chat-bubble__citations-button").click()
+        self.element.locator(".iai-chat-bubble__citations-button-container a.iai-chat-bubble__button").click()
         return CitationsPage(self.chats_page.page)
 
     @classmethod

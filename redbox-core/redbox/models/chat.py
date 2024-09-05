@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Literal
-from uuid import UUID
 
+from redbox.models.chain import AISettings
 from pydantic import BaseModel, Field
 
 
@@ -21,7 +21,7 @@ class ChatMessage(BaseModel):
 
 
 class SelectedDocument(BaseModel):
-    uuid: UUID | None = Field(description="uuid of selected file", default=None)
+    s3_key: str = Field(description="s3_key of selected file")
 
 
 class ChatRequest(BaseModel):
@@ -30,6 +30,7 @@ class ChatRequest(BaseModel):
         description="Documents selected to use for the current chat request",
         default_factory=list,
     )
+    ai_settings: AISettings = Field(default_factory=AISettings)
 
     model_config = {
         "json_schema_extra": {
@@ -40,8 +41,8 @@ class ChatRequest(BaseModel):
                         {"text": "What is AI?", "role": "user"},
                     ],
                     "selected_files": [
-                        {"uuid": "9aa1aa15-dde0-471f-ab27-fd410612025b"},
-                        {"uuid": "219c2e94-9877-4f83-ad6a-a59426f90171"},
+                        {"s3_key": "s3_key_1"},
+                        {"s3_key": "s3_key_2"},
                     ],
                 }
             ]
@@ -51,7 +52,7 @@ class ChatRequest(BaseModel):
 
 class SourceDocument(BaseModel):
     page_content: str = Field(description="chunk text")
-    file_uuid: UUID | None = Field(description="uuid of original file", default=None)
+    s3_key: str = Field(description="s3_key of original file")
     page_numbers: list[int] | None = Field(
         description="page number of the file that this chunk came from", default=None
     )
@@ -64,16 +65,11 @@ class SourceDocuments(BaseModel):
 
 
 class ChatRoute(StrEnum):
-    info = "info"
-    ability = "ability"
-    coach = "coach"
-    gratitude = "gratitude"
     search = "search"
-    summarise = "summarise"
-    map_reduce_summarise = "summarise/documents/large"
     chat = "chat"
     chat_with_docs = "chat/documents"
     chat_with_docs_map_reduce = "chat/documents/large"
+    error_no_keyword = "error/no-keyword"
 
 
 class ChatResponse(BaseModel):
@@ -87,6 +83,11 @@ class ChatResponse(BaseModel):
     route_name: ChatRoute = Field(description="the conversation route taken")
 
 
+class MetadataDetail(BaseModel):
+    input_tokens: dict[str, int] = Field(default_factory=dict)
+    output_tokens: dict[str, int] = Field(default_factory=dict)
+
+
 class ErrorDetail(BaseModel):
     code: str
     message: str
@@ -94,5 +95,5 @@ class ErrorDetail(BaseModel):
 
 class ClientResponse(BaseModel):
     # Needs to match CoreChatResponse in django_app/redbox_app/redbox_core/consumers.py
-    resource_type: Literal["text", "documents", "route_name", "end", "error"]
-    data: list[SourceDocument] | str | ErrorDetail | None = None
+    resource_type: str
+    data: list[SourceDocument] | str | MetadataDetail | ErrorDetail | None = None

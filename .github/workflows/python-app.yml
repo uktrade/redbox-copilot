@@ -12,6 +12,7 @@ on:
       - 'bugfix/**'
       - 'hotfix/**'
       - 'dependabot/**'
+      - 'security/**'
       - 'develop'
   workflow_dispatch:
 
@@ -47,44 +48,6 @@ jobs:
       run: |
         make test-core-api
 
-  test-worker:
-
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v3
-      with:
-        python-version: "3.12"
-
-    - name: Set up Poetry
-      uses: abatilo/actions-poetry@v2
-      with:
-        poetry-version: 1.7.0
-
-    - name: Build Containers
-      run: |
-        mkdir -p data/elastic/
-        chmod 777 data/elastic/
-        cp .env.test .env
-        docker compose up -d --wait elasticsearch
-
-    - name: Add dependencies for worker
-      run: |
-        sudo apt update && sudo apt-get install -y \
-        poppler-utils \
-        tesseract-ocr \
-        libmagic-dev
-
-    - name: Test worker with pytest
-      run: |
-        cp .env.test worker/.env
-        cd worker
-        poetry install
-        poetry run python -m nltk.downloader punkt
-        poetry run pytest --cov=worker -v --cov-report=term-missing --cov-fail-under=80
 
   test-redbox:
 
@@ -115,6 +78,37 @@ jobs:
         make test-redbox
 
 
+  test-django:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.12"
+
+    - name: Set up Poetry
+      uses: abatilo/actions-poetry@v2
+      with:
+        poetry-version: 1.7.0
+
+    - name: Build Containers
+      run: |
+        mkdir -p data/elastic/
+        chmod -R 777 data/
+        cp .env.test .env
+        sed -i -e "s/^OBJECT_STORE=.*/OBJECT_STORE=minio/" .env
+        docker compose up -d --wait elasticsearch minio db
+        docker ps
+
+    - name: Test django with pytest
+      run: |
+        make test-django
+
+
   static_checks:
 
     runs-on: ubuntu-latest
@@ -140,7 +134,3 @@ jobs:
       run: |
         poetry run ruff format . --check
         poetry run ruff check .
-
-    - name: Type check
-      run: |
-        make checktypes

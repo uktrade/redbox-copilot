@@ -13,10 +13,12 @@ from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.http import require_http_methods
+from django_q.tasks import async_task
 from requests.exceptions import RequestException
 
 from redbox_app.redbox_core.client import CoreApiClient
 from redbox_app.redbox_core.models import File, StatusEnum, User
+from redbox_app.worker import ingest
 
 logger = logging.getLogger(__name__)
 core_api = CoreApiClient(host=settings.CORE_API_HOST, port=settings.CORE_API_PORT)
@@ -48,27 +50,24 @@ APPROVED_FILE_EXTENSIONS = [
 MAX_FILE_SIZE = 209715200  # 200 MB or 200 * 1024 * 1024
 
 
-@login_required
-def documents_view(request):
-    completed_files = File.objects.filter(user=request.user, status=StatusEnum.complete).order_by("-created_at")
-    hidden_statuses = [StatusEnum.deleted, StatusEnum.errored, StatusEnum.complete]
-    processing_files = (
-        File.objects.filter(user=request.user).exclude(status__in=hidden_statuses).order_by("-created_at")
-    )
+class DocumentView(View):
+    @method_decorator(login_required)
+    def get(self, request: HttpRequest) -> HttpResponse:
+        completed_files, processing_files = File.get_completed_and_processing_files(request.user)
 
-    ingest_errors = request.session.get("ingest_errors", [])
-    request.session["ingest_errors"] = []
+        ingest_errors = request.session.get("ingest_errors", [])
+        request.session["ingest_errors"] = []
 
-    return render(
-        request,
-        template_name="documents.html",
-        context={
-            "request": request,
-            "completed_files": completed_files,
-            "processing_files": processing_files,
-            "ingest_errors": ingest_errors,
-        },
-    )
+        return render(
+            request,
+            template_name="documents.html",
+            context={
+                "request": request,
+                "completed_files": completed_files,
+                "processing_files": processing_files,
+                "ingest_errors": ingest_errors,
+            },
+        )
 
 
 class UploadView(View):
@@ -97,7 +96,7 @@ class UploadView(View):
                     ingest_errors.append(f"{uploaded_file.name}: {ingest_error[0]}")
 
             request.session["ingest_errors"] = ingest_errors
-            return redirect(reverse(documents_view))
+            return redirect(reverse("documents"))
 
         return self.build_response(request, errors)
 
@@ -136,8 +135,9 @@ class UploadView(View):
     def ingest_file(uploaded_file: UploadedFile, user: User) -> Sequence[str]:
         errors: MutableSequence[str] = []
         try:
+            logger.info("getting file from s3")
             file = File.objects.create(
-                status=StatusEnum.uploaded.value,
+                status=StatusEnum.processing.value,
                 user=user,
                 original_file=uploaded_file,
                 original_file_name=uploaded_file.name,
@@ -148,6 +148,7 @@ class UploadView(View):
             errors.append(e.args[0])
         else:
             try:
+                logger.info("pushing file to core")
                 upload_file_response = core_api.upload_file(file.unique_name, user)
             except RequestException as e:
                 logger.exception("Error uploading file object %s.", file, exc_info=e)
@@ -156,6 +157,7 @@ class UploadView(View):
             else:
                 file.core_file_uuid = upload_file_response.uuid
                 file.save()
+                async_task(ingest, file.id, task_name=file.unique_name, group="ingest")
         return errors
 
 
@@ -191,20 +193,10 @@ def file_status_api_view(request: HttpRequest) -> JsonResponse:
     file_id = request.GET.get("id", None)
     if not file_id:
         logger.error("Error getting file object information - no file ID provided %s.")
-        return JsonResponse({"status": StatusEnum.unknown.label})
+        return JsonResponse({"status": StatusEnum.errored.label})
     try:
         file: File = get_object_or_404(File, id=file_id)
     except File.DoesNotExist as ex:
         logger.exception("File object information not found in django - file does not exist %s.", file_id, exc_info=ex)
-        return JsonResponse({"status": StatusEnum.unknown.label})
-    try:
-        core_file_status_response = core_api.get_file_status(file_id=file.core_file_uuid, user=request.user)
-    except RequestException as ex:
-        logger.exception("File object information from core not found - file does not exist %s.", file_id, exc_info=ex)
-        if not file.status:
-            file.status = StatusEnum.unknown.label
-            file.save()
-        return JsonResponse({"status": file.status})
-    file.status = core_file_status_response.processing_status or StatusEnum.unknown.name
-    file.save()
+        return JsonResponse({"status": StatusEnum.errored.label})
     return JsonResponse({"status": file.get_status_text()})

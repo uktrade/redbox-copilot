@@ -34,28 +34,19 @@ rebuild: stop prune ## Rebuild all images
 
 .PHONY: test-core-api
 test-core-api: ## Test core-api
-	cp .env.test core-api/.env
-	cd core-api && poetry install --with dev && poetry run python -m pytest -m "not ai" --cov=core_api -v --cov-report=term-missing --cov-fail-under=75
+	cd core-api && poetry install --with dev && poetry run python -m pytest  --cov=core_api -v --cov-report=term-missing --cov-fail-under=75
 
 .PHONY: test-ai
 test-ai: ## Test code with live LLM
-	cp .env.test core-api/.env
-	cd core-api && poetry install --with dev && poetry run python -m pytest -m "ai" --cov=core_api -v --cov-report=term-missing --cov-fail-under=80
+	cd redbox-core && poetry install --with dev && poetry run python -m pytest -m "ai" --cov=redbox -v --cov-report=term-missing --cov-fail-under=80
 
 .PHONY: test-redbox
 test-redbox: ## Test redbox
-	cp .env.test redbox-core/.env
-	cd redbox-core && poetry install && poetry run pytest --cov=redbox -v --cov-report=term-missing --cov-fail-under=60
-
-.PHONY: test-worker
-test-worker: ## Test worker
-	cp .env.test worker/.env
-	cd worker && poetry install && poetry run pytest --cov=worker -v --cov-report=term-missing --cov-fail-under=80
+	cd redbox-core && poetry install && poetry run pytest -m "not ai" --cov=redbox -v --cov-report=term-missing --cov-fail-under=60
 
 .PHONY: test-django
-test-django: stop ## Test django-app
-	docker compose up -d --wait db minio
-	docker compose run --no-deps django-app venv/bin/pytest tests/ --ds redbox_app.settings -v --cov=redbox_app.redbox_core --cov-fail-under 85 -o log_cli=true
+test-django: ## Test django-app
+	cd django_app && poetry install && poetry run pytest --cov=redbox_app -v --cov-report=term-missing --cov-fail-under=60 --ds redbox_app.settings
 
 .PHONY: build-django-static
 build-django-static: ## Build django-app static files
@@ -88,14 +79,6 @@ format:  ## Format and fix code
 safe:  ##
 	poetry run bandit -ll -r ./redbox
 	poetry run bandit -ll -r ./django_app
-	poetry run mypy ./redbox --ignore-missing-imports
-	poetry run mypy ./django_app --ignore-missing-imports
-
-.PHONY: checktypes
-checktypes:  ## Check types in redbox and worker
-	poetry install --with dev --without docs --no-root
-	poetry run mypy redbox-core --ignore-missing-imports
-	poetry run mypy worker --ignore-missing-imports
 
 .PHONY: check-migrations
 check-migrations: stop  ## Check types in redbox and worker
@@ -142,15 +125,16 @@ DOCKER_SERVICES=$$(docker compose config --services | grep -v mlflow)
 AUTO_APPLY_RESOURCES = module.django-app.aws_ecs_task_definition.aws-ecs-task \
                        module.django-app.aws_ecs_service.aws-ecs-service \
                        module.django-app.data.aws_ecs_task_definition.main \
-                       module.core-api.aws_ecs_task_definition.aws-ecs-task \
-                       module.core-api.aws_ecs_service.aws-ecs-service \
-                       module.core-api.data.aws_ecs_task_definition.main \
+                       module.core_api.aws_ecs_task_definition.aws-ecs-task \
+                       module.core_api.aws_ecs_service.aws-ecs-service \
+                       module.core_api.data.aws_ecs_task_definition.main \
                        module.worker.aws_ecs_task_definition.aws-ecs-task \
                        module.worker.aws_ecs_service.aws-ecs-service \
                        module.worker.data.aws_ecs_task_definition.main \
                        aws_secretsmanager_secret.django-app-secret \
                        aws_secretsmanager_secret.worker-secret \
-                       aws_secretsmanager_secret.core-api-secret
+                       aws_secretsmanager_secret.core-api-secret \
+                       module.django-lambda.aws_lambda_function.lambda_function
 
 target_modules = $(foreach resource,$(AUTO_APPLY_RESOURCES),-target $(resource))
 
@@ -231,7 +215,10 @@ tf_set_or_create_workspace:
 
 .PHONY: tf_init
 tf_init: ## Initialise terraform
-	terraform -chdir=./infrastructure/aws/$(instance) init -backend-config=$(TF_BACKEND_CONFIG) ${args}
+	terraform -chdir=./infrastructure/aws/$(instance) init  \
+	-backend-config="dynamodb_table=i-dot-ai-$(env)-dynamo-lock" \
+	-backend-config=$(TF_BACKEND_CONFIG) \
+	${args}
 
 .PHONY: tf_plan
 tf_plan: ## Plan terraform

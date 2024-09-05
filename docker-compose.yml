@@ -1,6 +1,12 @@
 version: '3'
 
 services:
+  unstructured:
+    image: quay.io/unstructured-io/unstructured-api:latest
+    ports:
+    - 8000:8000
+    networks:
+      - redbox-app-network
   django-app:
     image: django-app:latest
     build:
@@ -16,7 +22,10 @@ services:
     networks:
       - redbox-app-network
     env_file:
-      - .env
+      - path: .env.integration
+        required: false
+      - path: .env
+        required: false
     volumes:
       - /app/django_app/frontend/node_modules
       - ./django_app:/app/django_app/
@@ -33,7 +42,10 @@ services:
   db:
     image: postgres:13
     env_file:
-      - .env
+      - path: .env.integration
+        required: false
+      - path: .env
+        required: false
     volumes:
       - local_postgres_data:/var/lib/postgresql/data:Z
     networks:
@@ -41,7 +53,7 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready", "-d", "db_prod" ]
+      test: [ "CMD-SHELL", "pg_isready", "-U", "redbox-core", "-d", "db_prod" ]
       interval: 5s
       timeout: 30s
       retries: 24
@@ -69,20 +81,21 @@ services:
     image: redbox-worker:latest
     build:
       context: .
-      dockerfile: worker/Dockerfile
-      args:
-        - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
+      dockerfile: django_app/Dockerfile.worker
+    command: "venv/bin/django-admin qcluster"
     env_file:
       - path: .env.integration
         required: false
       - path: .env
         required: false
     depends_on:
+      unstructured:
+        condition: service_started
       elasticsearch:
         condition: service_healthy
       minio:
         condition: service_healthy
-      redis:
+      django-app:
         condition: service_healthy
     networks:
       - redbox-app-network
@@ -111,10 +124,6 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-      worker:
-        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: curl --fail http://localhost:5002/health || exit 1
@@ -189,27 +198,6 @@ services:
       elasticsearch:
         condition: service_healthy
     restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    restart: always
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis:/data/redis
-    env_file:
-      - path: .env.integration
-        required: false
-      - path: .env
-        required: false
-    networks:
-      - redbox-app-network
-    healthcheck:
-      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
-      interval: 5s
-      timeout: 30s
-      retries: 24
-      start_period: 60s
   embeddings:
     image: localai/localai:v2.18.1-aio-cpu #localai/localai:v2.18.1 should allow use of sentencetransformers backend
     expose:
@@ -242,6 +230,3 @@ volumes:
   redbox-app-data:
   local_postgres_data: {}
   mlflow-data:
-  redis:
-    driver: local
-  redis-insight:

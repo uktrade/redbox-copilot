@@ -2,52 +2,39 @@ import json
 import logging
 from asyncio import CancelledError
 from collections.abc import Mapping, MutableSequence, Sequence
-from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 from uuid import UUID
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
-from dataclasses_json import Undefined, dataclass_json
 from django.conf import settings
+from django.forms.models import model_to_dict
 from django.utils import timezone
 from websockets import ConnectionClosedError, WebSocketClientProtocol
 from websockets.client import connect
 from yarl import URL
 
+from redbox.models.chat import ClientResponse, MetadataDetail, SourceDocument
 from redbox_app.redbox_core import error_messages
-from redbox_app.redbox_core.models import ChatHistory, ChatMessage, ChatRoleEnum, Citation, File, User
+from redbox_app.redbox_core.models import (
+    AISettings,
+    Chat,
+    ChatMessage,
+    ChatMessageTokenUse,
+    ChatRoleEnum,
+    Citation,
+    File,
+    User,
+)
 
 OptFileSeq = Sequence[File] | None
 logger = logging.getLogger(__name__)
 logger.info("WEBSOCKET_SCHEME is: %s", settings.WEBSOCKET_SCHEME)
 
 
-@dataclass_json(undefined=Undefined.EXCLUDE)
-@dataclass(frozen=True)
-class CoreChatResponseDoc:
-    file_uuid: UUID
-    page_content: str | None = None
-    page_numbers: list[int] | None = None
-
-
-@dataclass_json(undefined=Undefined.EXCLUDE)
-@dataclass(frozen=True)
-class ErrorDetail:
-    code: str
-    message: str
-
-
-@dataclass_json(undefined=Undefined.EXCLUDE)
-@dataclass(frozen=True)
-class CoreChatResponse:
-    # Needs to match ClientResponse in core_api/src/routes/chat.py
-    resource_type: Literal["text", "documents", "route_name", "end", "error"]
-    data: list[CoreChatResponseDoc] | str | ErrorDetail | None = None
-
-
 class ChatConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data=None, bytes_data=None):
+        """Receive & respond to message from browser websocket."""
         data = json.loads(text_data or bytes_data)
         logger.debug("received %s from browser", data)
         user_message_text: str = data.get("message", "")
@@ -55,7 +42,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         selected_file_uuids: Sequence[UUID] = [UUID(u) for u in data.get("selectedFiles", [])]
         user: User = self.scope.get("user", None)
 
-        session: ChatHistory = await self.get_session(session_id, user, user_message_text)
+        session: Chat = await self.get_session(session_id, user, user_message_text)
 
         # save user message
         selected_files = await self.get_files_by_id(selected_file_uuids, user)
@@ -64,9 +51,8 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.llm_conversation(selected_files, session, user, user_message_text)
         await self.close()
 
-    async def llm_conversation(
-        self, selected_files: Sequence[File], session: ChatHistory, user: User, title: str
-    ) -> None:
+    async def llm_conversation(self, selected_files: Sequence[File], session: Chat, user: User, title: str) -> None:
+        """Initiate & close websocket conversation with the core-api message endpoint."""
         session_messages = await self.get_messages(session)
         message_history: Sequence[Mapping[str, str]] = [
             {"role": message.role, "text": message.text} for message in session_messages
@@ -76,29 +62,37 @@ class ChatConsumer(AsyncWebsocketConsumer):
             async with connect(str(url), extra_headers={"Authorization": user.get_bearer_token()}) as core_websocket:
                 message = {
                     "message_history": message_history,
-                    "selected_files": [{"uuid": f.core_file_uuid} for f in selected_files],
+                    "selected_files": [{"s3_key": f.unique_name} for f in selected_files],
+                    "ai_settings": await self.get_ai_settings(user),
                 }
                 await self.send_to_server(core_websocket, message)
                 await self.send_to_client("session-id", session.id)
-                reply, citations, route = await self.receive_llm_responses(user, core_websocket)
-            message = await self.save_message(session, reply, ChatRoleEnum.ai, sources=citations, route=route)
+                reply, citations, route, metadata = await self.receive_llm_responses(user, core_websocket)
+            message = await self.save_message(
+                session, reply, ChatRoleEnum.ai, sources=citations, route=route, metadata=metadata
+            )
             await self.send_to_client("end", {"message_id": message.id, "title": title, "session_id": session.id})
 
             for file, _ in citations:
                 file.last_referenced = timezone.now()
                 await self.file_save(file)
+        except RateLimitError as e:
+            logger.exception("429 error from core.", exc_info=e)
+            await self.send_to_client("error", error_messages.RATE_LIMITED)
         except (TimeoutError, ConnectionClosedError, CancelledError, CoreError) as e:
             logger.exception("Error from core.", exc_info=e)
             await self.send_to_client("error", error_messages.CORE_ERROR_MESSAGE)
 
     async def receive_llm_responses(
         self, user: User, core_websocket: WebSocketClientProtocol
-    ) -> tuple[str, Sequence[tuple[File, CoreChatResponseDoc]], str]:
+    ) -> tuple[str, Sequence[tuple[File, SourceDocument]], str, MetadataDetail]:
+        """Conduct websocket conversation with the core-api message endpoint."""
         full_reply: MutableSequence[str] = []
-        citations: MutableSequence[tuple[File, CoreChatResponseDoc]] = []
+        citations: MutableSequence[tuple[File, SourceDocument]] = []
         route: str | None = None
+        metadata: MetadataDetail = MetadataDetail()
         async for raw_message in core_websocket:
-            response: CoreChatResponse = CoreChatResponse.schema().loads(raw_message)
+            response: ClientResponse = ClientResponse.model_validate_json(raw_message)
             logger.debug("received %s from core-api", response)
             if response.resource_type == "text":
                 full_reply.append(await self.handle_text(response))
@@ -106,23 +100,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 citations += await self.handle_documents(response, user)
             elif response.resource_type == "route_name":
                 route = await self.handle_route(response, user.is_staff)
+            elif response.resource_type == "metadata":
+                metadata = await self.handle_metadata(metadata, response.data)
             elif response.resource_type == "error":
                 full_reply.append(await self.handle_error(response))
-        return "".join(full_reply), citations, route
+        return "".join(full_reply), citations, route, metadata
 
-    async def handle_documents(
-        self, response: CoreChatResponse, user: User
-    ) -> Sequence[tuple[File, CoreChatResponseDoc]]:
+    async def handle_documents(self, response: ClientResponse, user: User) -> Sequence[tuple[File, SourceDocument]]:
         source_files, citations = await self.get_sources_with_files(response.data, user)
         for file in source_files:
             await self.send_to_client("source", {"url": str(file.url), "original_file_name": file.original_file_name})
         return citations
 
-    async def handle_text(self, response: CoreChatResponse) -> str:
+    async def handle_text(self, response: ClientResponse) -> str:
         await self.send_to_client("text", response.data)
         return response.data
 
-    async def handle_route(self, response: CoreChatResponse, show_route: bool) -> str:
+    async def handle_route(self, response: ClientResponse, show_route: bool) -> str:
         # TODO(@rachaelcodes): remove is_staff conditional and hidden-route with new route design
         # https://technologyprogramme.atlassian.net/browse/REDBOX-419
         if show_route:
@@ -131,7 +125,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.send_to_client("hidden-route", response.data)
         return response.data
 
-    async def handle_error(self, response: CoreChatResponse) -> str:
+    async def handle_metadata(self, current_metadata: MetadataDetail, metadata_event: MetadataDetail):
+        result = current_metadata.model_copy(deep=True)
+        for model, token_count in metadata_event.input_tokens.items():
+            result.input_tokens[model] = current_metadata.input_tokens.get(model, 0) + token_count
+        for model, token_count in metadata_event.output_tokens.items():
+            result.output_tokens[model] = current_metadata.output_tokens.get(model, 0) + token_count
+        return result
+
+    async def handle_error(self, response: ClientResponse) -> str:
         match response.data.code:
             case "no-document-selected":
                 message = error_messages.SELECT_DOCUMENT
@@ -141,6 +143,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 message = error_messages.QUESTION_TOO_LONG
                 await self.send_to_client("text", message)
                 return message
+            case "rate-limit":
+                message = f"{response.data.code}: {response.data.message}"
+                raise RateLimitError(message)
             case _:
                 message = f"{response.data.code}: {response.data.message}"
                 raise CoreError(message)
@@ -151,37 +156,38 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.send(json.dumps(message, default=str))
 
     @staticmethod
-    async def send_to_server(websocket, data):
+    async def send_to_server(websocket: WebSocketClientProtocol, data: Mapping[str, Any]) -> None:
         logger.debug("sending %s to core-api", data)
         return await websocket.send(json.dumps(data, default=str))
 
     @staticmethod
     @database_sync_to_async
-    def get_session(session_id: str, user: User, user_message_text: str) -> ChatHistory:
+    def get_session(session_id: str, user: User, user_message_text: str) -> Chat:
         if session_id:
-            session = ChatHistory.objects.get(id=session_id)
+            session = Chat.objects.get(id=session_id)
         else:
             session_name = user_message_text[0 : settings.CHAT_TITLE_LENGTH]
-            session = ChatHistory(name=session_name, users=user)
+            session = Chat(name=session_name, user=user)
             session.save()
         return session
 
     @staticmethod
     @database_sync_to_async
-    def get_messages(session: ChatHistory) -> Sequence[ChatMessage]:
-        return list(ChatMessage.objects.filter(chat_history=session).order_by("created_at"))
+    def get_messages(session: Chat) -> Sequence[ChatMessage]:
+        return list(ChatMessage.objects.filter(chat=session).order_by("created_at"))
 
     @staticmethod
     @database_sync_to_async
     def save_message(
-        session: ChatHistory,
+        session: Chat,
         user_message_text: str,
         role: ChatRoleEnum,
-        sources: Sequence[tuple[File, CoreChatResponseDoc]] | None = None,
+        sources: Sequence[tuple[File, SourceDocument]] | None = None,
         selected_files: Sequence[File] | None = None,
+        metadata: MetadataDetail | None = None,
         route: str | None = None,
     ) -> ChatMessage:
-        chat_message = ChatMessage(chat_history=session, text=user_message_text, role=role, route=route)
+        chat_message = ChatMessage(chat=session, text=user_message_text, role=role, route=route)
         chat_message.save()
         if sources:
             for file, citations in sources:
@@ -194,6 +200,23 @@ class ChatConsumer(AsyncWebsocketConsumer):
                     )
         if selected_files:
             chat_message.selected_files.set(selected_files)
+        if metadata:
+            if metadata.input_tokens:
+                for model, token_count in metadata.input_tokens.items():
+                    ChatMessageTokenUse.objects.create(
+                        chat_message=chat_message,
+                        use_type=ChatMessageTokenUse.UseTypeEnum.INPUT,
+                        model_name=model,
+                        token_count=token_count,
+                    )
+            if metadata.output_tokens:
+                for model, token_count in metadata.output_tokens.items():
+                    ChatMessageTokenUse.objects.create(
+                        chat_message=chat_message,
+                        use_type=ChatMessageTokenUse.UseTypeEnum.OUTPUT,
+                        model_name=model,
+                        token_count=token_count,
+                    )
         return chat_message
 
     @staticmethod
@@ -204,18 +227,30 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @staticmethod
     @database_sync_to_async
     def get_sources_with_files(
-        docs: Sequence[CoreChatResponseDoc], user: User
-    ) -> tuple[Sequence[File], Sequence[tuple[File, CoreChatResponseDoc]]]:
-        uuids = [doc.file_uuid for doc in docs]
-        files = File.objects.filter(core_file_uuid__in=uuids, user=user)
+        docs: Sequence[SourceDocument], user: User
+    ) -> tuple[Sequence[File], Sequence[tuple[File, Sequence[SourceDocument]]]]:
+        s3_keys = [doc.s3_key for doc in docs]
+        files = File.objects.filter(original_file__in=s3_keys, user=user)
 
-        return files, [(file, [doc for doc in docs if doc.file_uuid == file.core_file_uuid]) for file in files]
+        return files, [(file, [doc for doc in docs if doc.s3_key == file.unique_name]) for file in files]
 
     @staticmethod
     @database_sync_to_async
     def file_save(file):
         return file.save()
 
+    @staticmethod
+    @database_sync_to_async
+    def get_ai_settings(user: User) -> AISettings:
+        return model_to_dict(
+            user.ai_settings,
+            fields=[field.name for field in user.ai_settings._meta.fields if field.name != "label"],  # noqa: SLF001
+        )
+
 
 class CoreError(Exception):
     message: str
+
+
+class RateLimitError(CoreError):
+    pass
