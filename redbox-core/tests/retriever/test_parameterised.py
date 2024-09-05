@@ -1,37 +1,37 @@
 import pytest
-from langchain_core.documents.base import Document
 
+from redbox.models.chain import RedboxState
 from redbox.retriever import ParameterisedElasticsearchRetriever
+from redbox.test.data import RedboxChatTestCase
 
 test_chain_parameters = (
     {
-        "size": 1,
-        "num_candidates": 100,
+        "rag_k": 1,
+        "rag_num_candidates": 100,
         "match_boost": 1,
         "knn_boost": 2,
-        "similarity_threshold": 0.7,
+        "similarity_threshold": 0,
+        "elbow_filter_enabled": True,
     },
     {
-        "size": 2,
-        "num_candidates": 100,
+        "rag_k": 2,
+        "rag_num_candidates": 100,
         "match_boost": 1,
         "knn_boost": 2,
-        "similarity_threshold": 0.7,
+        "similarity_threshold": 0,
+        "elbow_filter_enabled": False,
     },
 )
 
 
 @pytest.mark.parametrize("chain_params", test_chain_parameters)
 def test_parameterised_retriever(
-    chain_params,
+    chain_params: dict,
     parameterised_retriever: ParameterisedElasticsearchRetriever,
-    stored_file_parameterised: list[Document],
+    stored_file_parameterised: RedboxChatTestCase,
 ):
-    result = parameterised_retriever.with_config(configurable={"params": chain_params}).invoke(
-        {
-            "question": "is this real?",
-            "file_uuids": [stored_file_parameterised[0].metadata["parent_file_uuid"]],
-            "user_uuid": stored_file_parameterised[0].metadata["creator_user_uuid"],
-        }
-    )
-    assert len(result) == chain_params["size"], result
+    for k, v in chain_params.items():
+        setattr(stored_file_parameterised.query.ai_settings, k, v)
+
+    result = parameterised_retriever.invoke(RedboxState(request=stored_file_parameterised.query))
+    assert len(result) == chain_params["rag_k"], result

@@ -1,6 +1,12 @@
-from langchain_core.documents.base import Document
+import tiktoken
+from uuid import uuid5, NAMESPACE_DNS
+
+from langchain_core.documents import Document
+from langchain_core.callbacks.manager import dispatch_custom_event
+from langchain_core.runnables import RunnableLambda
 
 from redbox.models.chat import SourceDocument
+from redbox.models.chain import DocumentState, RequestMetadata
 
 
 def map_document_to_source_document(d: Document) -> SourceDocument:
@@ -14,7 +20,7 @@ def map_document_to_source_document(d: Document) -> SourceDocument:
 
     return SourceDocument(
         page_content=d.page_content,
-        file_uuid=d.metadata["parent_file_uuid"],
+        s3_key=d.metadata["file_name"],
         page_numbers=map_page_numbers(d.metadata.get("page_number")),
     )
 
@@ -45,3 +51,57 @@ def combine_documents(a: Document, b: Document):
     combined_metadata["links"] = combine_values("links")
 
     return Document(page_content=combined_content, metadata=combined_metadata)
+
+
+def structure_documents(docs: list[Document]) -> DocumentState:
+    """Structures a list of documents by a group_uuid and document_uuid.
+
+    The group_uuid is generated deterministically based on the file_name.
+
+    The document_uuid is taken from the Document metadata directly.
+    """
+    result = {}
+
+    # Group file_name to UUID lookup
+    group_file_lookup = {}
+    for d in docs:
+        file_name = d.metadata["file_name"]
+        if file_name not in group_file_lookup:
+            group_file_lookup[file_name] = uuid5(NAMESPACE_DNS, file_name)
+
+    # Group documents by their file_name's UUID
+    for d in docs:
+        group_uuid = group_file_lookup.get(d.metadata["file_name"])
+        doc_dict = {d.metadata["uuid"]: d}
+
+        result[group_uuid] = (result.get(group_uuid) or doc_dict) | doc_dict
+
+    return result
+
+
+def flatten_document_state(documents: DocumentState) -> list[Document]:
+    if not documents:
+        return []
+    return [document for group in documents.values() for document in group.values()]
+
+
+@RunnableLambda
+def to_request_metadata(prompt_response_model: dict):
+    """Takes a dictionary with keys 'prompt', 'response' and 'model' and creates metadata.
+
+    Will also emit events for metadata updates.
+    """
+    model = prompt_response_model["model"]
+
+    try:
+        tokeniser = tiktoken.encoding_for_model(model)
+    except KeyError:
+        tokeniser = tiktoken.get_encoding("cl100k_base")
+
+    input_tokens = {model: len(tokeniser.encode(prompt_response_model["prompt"]))}
+    output_tokens = {model: len(tokeniser.encode(prompt_response_model["response"]))}
+
+    dispatch_custom_event("on_metadata_generation", RequestMetadata(input_tokens=input_tokens, output_tokens=dict()))
+    dispatch_custom_event("on_metadata_generation", RequestMetadata(input_tokens=dict(), output_tokens=output_tokens))
+
+    return RequestMetadata(input_tokens=input_tokens, output_tokens=output_tokens)

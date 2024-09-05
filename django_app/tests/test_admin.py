@@ -11,20 +11,21 @@ from django.urls import reverse
 from yarl import URL
 
 from redbox_app.redbox_core.models import ChatMessage, User
+from redbox_app.redbox_core.serializers import ChatMessageSerializer, ChatSerializer, UserSerializer
 
 logger = logging.getLogger(__name__)
 
 
 @pytest.mark.django_db()
-def test_chat_history_export(superuser: User, chat_message_with_rating: ChatMessage, client: Client):
+def test_chat_export(superuser: User, chat_message_with_rating: ChatMessage, client: Client):
     # Given
     client.force_login(superuser)
 
     # When
 
     # See https://docs.djangoproject.com/en/dev/ref/contrib/admin/#reversing-admin-urls
-    url = reverse("admin:redbox_core_chathistory_changelist")
-    data = {"action": "export_as_csv", "_selected_action": [chat_message_with_rating.chat_history.pk]}
+    url = reverse("admin:redbox_core_chat_changelist")
+    data = {"action": "export_as_csv", "_selected_action": [chat_message_with_rating.chat.pk]}
     response = client.post(url, data, follow=True)
 
     # Then
@@ -33,20 +34,20 @@ def test_chat_history_export(superuser: User, chat_message_with_rating: ChatMess
     assert len(rows) == 1
     row = rows[0]
     assert row["history_name"] == "A chat"
-    assert row["history_users"] == "alice@cabinetoffice.gov.uk"
+    assert row["history_user"] == "alice@cabinetoffice.gov.uk"
     assert row["message_text"] == "A question?"
-    assert row["rating_rating"] == "3"
-    assert row["rating_chips"] == "speed, accuracy, blasphemy"
+    assert row["message_rating"] == "3"
+    assert row["message_rating_chips"] == "['speed', 'accuracy', 'blasphemy']"
 
 
 @pytest.mark.django_db()
-def test_chat_history_export_without_ratings(superuser: User, chat_message: ChatMessage, client: Client):
+def test_chat_export_without_ratings(superuser: User, chat_message: ChatMessage, client: Client):
     # Given
     client.force_login(superuser)
 
     # When
-    url = reverse("admin:redbox_core_chathistory_changelist")
-    data = {"action": "export_as_csv", "_selected_action": [chat_message.chat_history.pk]}
+    url = reverse("admin:redbox_core_chat_changelist")
+    data = {"action": "export_as_csv", "_selected_action": [chat_message.chat.pk]}
     response = client.post(url, data, follow=True)
 
     # Then
@@ -55,10 +56,10 @@ def test_chat_history_export_without_ratings(superuser: User, chat_message: Chat
     assert len(rows) == 1
     row = rows[0]
     assert row["history_name"] == "A chat"
-    assert row["history_users"] == "alice@cabinetoffice.gov.uk"
+    assert row["history_user"] == "alice@cabinetoffice.gov.uk"
     assert row["message_text"] == "A question?"
-    assert row["rating_rating"] is None
-    assert row["rating_chips"] is None
+    assert row["message_rating"] == ""
+    assert row["message_rating_chips"] == ""
 
 
 @pytest.mark.django_db()
@@ -84,3 +85,59 @@ def test_user_upload(superuser: User, client: Client):
     assert "3 new, 0 updated, 0 deleted and 0 skipped" in soup.find("li", {"class": "success"}).text
     users = User.objects.all()
     assert len(users) == 4
+
+
+@pytest.mark.django_db()
+def test_message_serializer(chat_message_with_citation_and_tokens: ChatMessage):
+    expected = {
+        "rating": 3,
+        "rating_chips": ["apple", "pear"],
+        "rating_text": "not bad",
+        "role": "ai",
+        "route": "chat",
+        "selected_files": [],
+        "text": "An answer.",
+    }
+
+    expected_token_usage = [
+        {"use_type": "input", "model_name": "gpt-4o", "token_count": 20},
+        {"use_type": "output", "model_name": "gpt-4o", "token_count": 200},
+    ]
+
+    actual = ChatMessageSerializer().to_representation(chat_message_with_citation_and_tokens)
+    for k, v in expected.items():
+        assert actual[k] == v, k
+
+    assert actual["source_files"][0]["original_file_name"].startswith("original_file")
+
+    for k, v in expected_token_usage[0].items():
+        assert actual["token_use"][0][k] == v, k
+
+    for k, v in expected_token_usage[1].items():
+        assert actual["token_use"][1][k] == v, k
+
+
+@pytest.mark.django_db()
+def test_chat_serializer(chat_message_with_citation: ChatMessage):
+    expected = {"name": "A chat"}
+    actual = ChatSerializer().to_representation(chat_message_with_citation.chat)
+    for k, v in expected.items():
+        assert actual[k] == v, k
+    assert actual["messages"][0]["text"]
+
+
+@pytest.mark.django_db()
+def test_user_serializer(chat_message_with_citation: ChatMessage):
+    expected = {
+        "ai_experience": "Experienced Navigator",
+        "business_unit": "Government Business Services",
+        "email": "alice@cabinetoffice.gov.uk",
+        "grade": "D",
+        "is_staff": False,
+        "profession": "IA",
+    }
+    actual = UserSerializer().to_representation(chat_message_with_citation.chat.user)
+    for k, v in expected.items():
+        assert actual[k] == v, k
+
+    assert actual["chats"][0]["messages"][0]["text"] == "An answer."

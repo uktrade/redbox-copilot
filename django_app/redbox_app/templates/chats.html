@@ -1,6 +1,5 @@
 {% set pageTitle = "Chats" %}
 {% extends "base.html" %}
-{% from "macros/govuk-button.html" import govukButton %}
 {% from "macros/chat-macros.html" import message_box, route_display %}
 
 
@@ -17,43 +16,56 @@
   <form class="govuk-grid-row js-message-input" action="/post-message/" method="post">
 
     <div class="govuk-grid-column-one-third">
+      <div class="rb-left-column-container govuk-!-margin-bottom-6">
 
-      <a class="iai-large-button" role="button" href="{{ url('chats') }}">
-        <svg width="22" height="22" fill="none" aria-hidden="true" focusable="false"><path d="M21 11c0-5.523-4.477-10-10-10S1 5.477 1 11s4.477 10 10 10 10-4.477 10-10z" stroke="currentColor" stroke-linejoin="round"/><g filter="url(#A)"><path d="M15.656 11.656h-4v4h-1.312v-4h-4v-1.312h4v-4h1.312v4h4v1.312z" fill="currentColor"/></g><defs><filter x="6" y="6" width="10" height="10" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="A"/><feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/><feOffset dx="1" dy="1"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"/><feBlend in2="A"/><feBlend in="SourceGraphic"/></filter></defs></svg>
-        New chat
-      </a>
+        <a class="iai-large-button" role="button" href="{{ url('chats') }}">
+          <svg width="22" height="22" fill="none" aria-hidden="true" focusable="false"><path d="M21 11c0-5.523-4.477-10-10-10S1 5.477 1 11s4.477 10 10 10 10-4.477 10-10z" stroke="currentColor" stroke-linejoin="round"/><g filter="url(#A)"><path d="M15.656 11.656h-4v4h-1.312v-4h-4v-1.312h4v-4h1.312v4h4v1.312z" fill="currentColor"/></g><defs><filter x="6" y="6" width="10" height="10" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="A"/><feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/><feOffset dx="1" dy="1"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"/><feBlend in2="A"/><feBlend in="SourceGraphic"/></filter></defs></svg>
+          New chat
+        </a>
 
       <div class="iai-panel govuk-!-margin-top-6">
         <h2 class="govuk-heading-s">Recent chats</h2>
-
-        {% for date_group, chats in chat_history_grouped_by_date_group %}
-        <h3 class="rb-chat-history__date_group govuk-body-s govuk-!-font-weight-bold govuk-!-margin-bottom-1">{{ date_group }}</h3>
-        <ul class="govuk-list govuk-list--spaced iai-panel__scrollable">
-          {% for chat in chats %}
-            <li class="govuk-!-margin-bottom-1">
-              <a class="govuk-link govuk-body-s" href="{{url('chats', chat.id)}}">{{ chat.name }}</a>
-            </li>
+        <div class="iai-panel__scrollable">
+          {% for date_group, chats in chat_grouped_by_date_group %}
+          <h3 class="rb-chat-history__date_group govuk-body-s govuk-!-font-weight-bold govuk-!-margin-bottom-1">{{ date_group }}</h3>
+          <ul class="govuk-list govuk-list--spaced">
+            {% for chat in chats %}
+              <li class="govuk-!-margin-bottom-1">
+                <a class="govuk-link govuk-body-s" href="{{url('chats', chat.id)}}">{{ chat.name }}</a>
+              </li>
+            {% endfor %}
+          </ul>
           {% endfor %}
-        </ul>
-        {% endfor %}
+        </div>
       </div>
 
-      <document-selector class="iai-panel iai-panel govuk-!-margin-top-6 govuk-!-margin-bottom-9">
-        <fieldset class="govuk-fieldset">
-          <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">
-            <h3 class="govuk-fieldset__heading">Documents to use</h3>
-          </legend>
-          <div class="govuk-checkboxes govuk-checkboxes--small iai-panel__scrollable" data-module="govuk-checkboxes">
-            {% for file in files %}
-              <div class="govuk-checkboxes__item">
-                <input class="govuk-checkboxes__input" id="file-{{ file.id }}" name="file-{{ file.id }}" type="checkbox" value="{{ file.id }}" {% if file.selected %}checked{% endif %}>
-                <label class="{#govuk-label#}govuk-checkboxes__label govuk-body-s" for="file-{{ file.id }}">{{ file.original_file_name }}</label>
+        <document-selector class="iai-panel iai-panel govuk-!-margin-top-6">
+          <fieldset class="govuk-fieldset">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">
+              <h3 class="govuk-fieldset__heading">Documents to use</h3>
+            </legend>
+            <div class="govuk-checkboxes govuk-checkboxes--small iai-panel__scrollable" data-module="govuk-checkboxes">
+              {% for file in completed_files %}
+                <div class="govuk-checkboxes__item">
+                  <input class="govuk-checkboxes__input" id="file-{{ file.id }}" name="file-{{ file.id }}" type="checkbox" value="{{ file.id }}" {% if file.selected %}checked{% endif %}>
+                  <label class="govuk-checkboxes__label govuk-body-s" for="file-{{ file.id }}">{{ file.original_file_name }}</label>
+                </div>
+              {% endfor %}
+              {# files not yet ready - stored here to be moved to main list once ready #}
+              <div hidden>
+                {% for file in processing_files %}
+                  <div class="govuk-checkboxes__item">
+                    <input class="govuk-checkboxes__input" id="file-{{ file.id }}" name="file-{{ file.id }}" type="checkbox" value="{{ file.id }}" {% if file.selected %}checked{% endif %}>
+                    <label class="govuk-checkboxes__label govuk-body-s" for="file-{{ file.id }}">{{ file.original_file_name }}</label>
+                    <file-status data-id="{{ file.id }}"></file-status>
+                  </div>
+                {% endfor %}
               </div>
-            {% endfor %}
-          </div>
-        </fieldset>
-      </document-selector>
+            </div>
+          </fieldset>
+        </document-selector>
 
+      </div>
     </div>
 
     <div class="govuk-grid-column-two-thirds">
@@ -119,12 +131,12 @@
               <textarea class="iai-chat-input__input js-user-text" id="message" name="message" rows="1" required></textarea>
             </message-input>
           </div>
-          <div>
-            <button class="iai-chat-input__button iai-icon-button" type="submit">
-              <svg width="32" height="32" viewBox="32 16 29 29" fill="none" focusable="false" aria-hidden="true"><g filter="url(#A)"><use xlink:href="#C" fill="#edeef2"/></g><g filter="url(#B)"><use xlink:href="#C" fill="#fff"/></g><path d="M47.331 36.205v-8.438l3.89 3.89.972-1.007-5.556-5.556-5.556 5.556.972.972 3.889-3.854v8.438h1.389z" fill="currentColor"/><defs><filter x="17" y="1" width="65" height="65" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="A"/><feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/><feOffset dx="3" dy="3"/><feGaussianBlur stdDeviation="10"/><feColorMatrix values="0 0 0 0 0.141176 0 0 0 0 0.254902 0 0 0 0 0.364706 0 0 0 0.302 0"/><feBlend in2="A"/><feBlend in="SourceGraphic"/></filter><filter id="B" x="0" y="-16" width="85" height="85" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="A"/><feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/><feOffset dx="-4" dy="-4"/><feGaussianBlur stdDeviation="15"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"/><feBlend in2="A"/><feBlend in="SourceGraphic"/></filter><path id="C" d="M59 30.5C59 23.596 53.404 18 46.5 18S34 23.596 34 30.5 39.596 43 46.5 43 59 37.404 59 30.5z"/></defs></svg>
+          <send-message>
+            <button class="iai-chat-input__button iai-icon-button rb-send-button" type="submit">
+              <svg width="28" height="28" viewBox="32 16 29 29" fill="none" focusable="false" aria-hidden="true"><g filter="url(#A)"><use xlink:href="#C" fill="#edeef2"/></g><g filter="url(#B)"><use xlink:href="#C" fill="#fff"/></g><path d="M47.331 36.205v-8.438l3.89 3.89.972-1.007-5.556-5.556-5.556 5.556.972.972 3.889-3.854v8.438h1.389z" fill="currentColor"/><defs><filter x="17" y="1" width="65" height="65" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="A"/><feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/><feOffset dx="3" dy="3"/><feGaussianBlur stdDeviation="10"/><feColorMatrix values="0 0 0 0 0.141176 0 0 0 0 0.254902 0 0 0 0 0.364706 0 0 0 0.302 0"/><feBlend in2="A"/><feBlend in="SourceGraphic"/></filter><filter id="B" x="0" y="-16" width="85" height="85" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="A"/><feColorMatrix in="SourceAlpha" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"/><feOffset dx="-4" dy="-4"/><feGaussianBlur stdDeviation="15"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1 0"/><feBlend in2="A"/><feBlend in="SourceGraphic"/></filter><path id="C" d="M59 30.5C59 23.596 53.404 18 46.5 18S34 23.596 34 30.5 39.596 43 46.5 43 59 37.404 59 30.5z"/></defs></svg>
               Send
             </button>
-          </div>
+          </send-message>
         </div>
         <p class="iai-chat-input__info-text">Redbox can make mistakes. You must check for accuracy before using the output.</p>
         <p class="iai-chat-input__info-text">You can use up to, and including, official sensitive documents.</p>

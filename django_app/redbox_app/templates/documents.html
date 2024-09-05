@@ -35,10 +35,7 @@
       <p class="govuk-body govuk-!-margin-bottom-1">This means you can:</p>
       <ul class="govuk-list govuk-list--bullet govuk-body">
         <li>Chat directly with an LLM (currently GPT-4o)</li>
-        <li>
-          Upload OFFICIAL documents that do not include
-          personal data.
-        </li>
+        <li>Upload OFFICIAL documents that do not include personal data.</li>
         <li>Summarise or ask questions of these documents.</li>
       </ul>
 
@@ -55,22 +52,34 @@
           Documents will be stored for up to 30 days.
         </p>
       </div>
-      #} {# New Docs list #} {% if completed_files or processing_files %}
-      <h2 class="govuk-heading-m">Ready to use</h2>
-      <p>
-        These documents are ready to chat with. Documents are deleted after 30
-        days
-      </p>
-      <doc-list>
-        {{ iaiDocList( docs = completed_files, type = "complete" ) }}
-      </doc-list>
-      {% endif %} {% if processing_files %}
-      <h2 class="govuk-heading-m govuk-!-margin-top-7">Processing</h2>
-      <p>These documents will not be included in chat responses</p>
-      {{ iaiDocList( docs = processing_files, type = "processing" ) }} {% endif
-      %}
+      #} {# New Docs list #}
+      <h2 class="govuk-heading-m govuk-!-margin-top-7">Ready to use</h2>
+      <div class="rb-docs">
+        <p class="rb-docs__show-if-no-docs">
+          Documents that are ready to chat with will be displayed here.
+        </p>
+        <p class="rb-docs__show-if-docs">
+          These documents are ready to chat with. Documents are deleted after 30
+          days.
+        </p>
+        <doc-list>
+          {{ iaiDocList( docs = completed_files, type = "complete" ) }}
+        </doc-list>
+      </div>
 
-      <div class="govuk-button-group govuk-!-margin-top-7">
+      <h2 class="govuk-heading-m govuk-!-margin-top-7">Processing</h2>
+      <div class="rb-docs">
+        <p class="rb-docs__show-if-no-docs">
+          Uploaded files that are processing will be displayed here.
+        </p>
+        <p class="rb-docs__show-if-docs">
+          These documents will not be included in chat responses.
+        </p>
+        {{ iaiDocList( docs = processing_files, type = "processing" ) }}
+      </div>
+
+      <h2 class="govuk-visually-hidden">General actions</h2>
+      <div class="govuk-button-group govuk-!-margin-top-8">
         {% if completed_files or processing_files %} {{ govukButton( text="Start
         chat", href=url('chats') ) }} {{ govukButton( text="Add documents",
         href=url('upload'), classes="govuk-button--secondary" ) }} {% else %} {{

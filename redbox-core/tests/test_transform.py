@@ -1,11 +1,11 @@
 from datetime import UTC, datetime
-from uuid import uuid4
 
 import pytest
 from langchain_core.documents.base import Document
 
-from redbox.transform import combine_documents, map_document_to_source_document
-from redbox.api.runnables import filter_by_elbow
+from redbox.models.chain import RequestMetadata
+from redbox.transform import combine_documents, map_document_to_source_document, to_request_metadata
+from redbox.retriever.retrievers import filter_by_elbow
 
 document_created = datetime.now(UTC)
 
@@ -16,19 +16,19 @@ document_created = datetime.now(UTC)
         (
             Document(
                 page_content="some random text",
-                metadata={"parent_file_uuid": uuid4(), "page_number": 1},
+                metadata={"file_name": "s3_key", "page_number": 1},
             )
         ),
         (
             Document(
                 page_content="some random text2",
-                metadata={"parent_file_uuid": uuid4(), "page_number": [1, 2]},
+                metadata={"file_name": "s3_key", "page_number": [1, 2]},
             )
         ),
         (
             Document(
                 page_content="some random text3",
-                metadata={"parent_file_uuid": uuid4()},
+                metadata={"file_name": "s3_key"},
             )
         ),
     ],
@@ -54,7 +54,7 @@ def test_map_document_to_source_document(document: Document):
         assert source_doc.page_numbers == []
 
     # Test UUID
-    assert source_doc.file_uuid == document.metadata["parent_file_uuid"]
+    assert source_doc.s3_key == document.metadata["file_name"]
 
 
 @pytest.mark.parametrize(
@@ -64,7 +64,7 @@ def test_map_document_to_source_document(document: Document):
             Document(
                 page_content="these are four tokens ",
                 metadata={
-                    "parent_file_uuid": "abcd",
+                    "file_name": "abcd",
                     "creator_user_uuid": "xabcd",
                     "index": 1,
                     "page_number": 1,
@@ -79,7 +79,7 @@ def test_map_document_to_source_document(document: Document):
             Document(
                 page_content="these are three",
                 metadata={
-                    "parent_file_uuid": "abcd",
+                    "file_name": "abcd",
                     "creator_user_uuid": "xabcd",
                     "index": 2,
                     "page_number": 2,
@@ -94,7 +94,7 @@ def test_map_document_to_source_document(document: Document):
             Document(
                 page_content="these are four tokens these are three",
                 metadata={
-                    "parent_file_uuid": "abcd",
+                    "file_name": "abcd",
                     "creator_user_uuid": "xabcd",
                     "index": 1,
                     "page_number": [1, 2],
@@ -111,7 +111,7 @@ def test_map_document_to_source_document(document: Document):
             Document(
                 page_content="there are six tokens right here ",
                 metadata={
-                    "parent_file_uuid": "asdf",
+                    "file_name": "asdf",
                     "creator_user_uuid": "xabcd",
                     "index": 10,
                     "page_number": [1, 2],
@@ -126,7 +126,7 @@ def test_map_document_to_source_document(document: Document):
             Document(
                 page_content="these are three",
                 metadata={
-                    "parent_file_uuid": "asdf",
+                    "file_name": "asdf",
                     "creator_user_uuid": "xabcd",
                     "index": 12,
                     "page_number": 3,
@@ -141,7 +141,7 @@ def test_map_document_to_source_document(document: Document):
             Document(
                 page_content="there are six tokens right here these are three",
                 metadata={
-                    "parent_file_uuid": "asdf",
+                    "file_name": "asdf",
                     "creator_user_uuid": "xabcd",
                     "index": 10,
                     "page_number": [1, 2, 3],
@@ -185,8 +185,42 @@ def test_elbow_filter(scores: list[float], target_len: int):
 
     documents = [Document(page_content="foo", metadata={"score": score}) for score in scores]
 
-    documents_filtered = elbow_filter.invoke(documents)
+    documents_filtered = elbow_filter(documents)
 
     assert (
         len(documents_filtered) == target_len
     ), f"Expected {target_len} documents to pass. Received: {len(documents_filtered)}"
+
+
+@pytest.mark.parametrize(
+    ("output", "expected"),
+    [
+        (
+            {
+                "prompt": "Lorem ipsum dolor sit amet.",
+                "response": (
+                    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, "
+                    "sed do eiusmod tempor incididunt ut labore et dolore magna "
+                    "aliqua. "
+                ),
+                "model": "gpt-4o",
+            },
+            RequestMetadata(input_tokens={"gpt-4o": 6}, output_tokens={"gpt-4o": 23}),
+        ),
+        (
+            {
+                "prompt": "Lorem ipsum dolor sit amet.",
+                "response": (
+                    "Lorem ipsum dolor sit amet, consectetur adipiscing elit, "
+                    "sed do eiusmod tempor incididunt ut labore et dolore magna "
+                    "aliqua. "
+                ),
+                "model": "unknown-model",
+            },
+            RequestMetadata(input_tokens={"unknown-model": 6}, output_tokens={"unknown-model": 23}),
+        ),
+    ],
+)
+def test_to_request_metadata(output: dict, expected: RequestMetadata):
+    result = to_request_metadata.invoke(output)
+    assert result == expected, f"Expected: {expected} Result: {result}"

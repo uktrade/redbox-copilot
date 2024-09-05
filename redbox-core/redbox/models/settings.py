@@ -1,143 +1,15 @@
 import logging
+import os
 from functools import lru_cache
 from typing import Literal
 
 import boto3
 from elasticsearch import Elasticsearch
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
 log = logging.getLogger()
-
-
-CHAT_SYSTEM_PROMPT = "You are an AI assistant called Redbox tasked with answering questions and providing information objectively."
-
-CHAT_WITH_DOCS_SYSTEM_PROMPT = "You are an AI assistant called Redbox tasked with answering questions on user provided documents and providing information objectively."
-
-CHAT_WITH_DOCS_REDUCE_SYSTEM_PROMPT = (
-    "You are an AI assistant tasked with answering questions on user provided documents. "
-    "Your goal is to answer the user question based on list of summaries in a coherent manner."
-    "Please follow these guidelines while answering the question: \n"
-    "1) Identify and highlight key points,\n"
-    "2) Avoid repetition,\n"
-    "3) Ensure the answer is easy to understand,\n"
-    "4) Maintain the original context and meaning.\n"
-)
-
-RETRIEVAL_SYSTEM_PROMPT = (
-    "Given the following conversation and extracted parts of a long document and a question, create a final answer. \n"
-    "If you don't know the answer, just say that you don't know. Don't try to make up an answer. "
-    "If a user asks for a particular format to be returned, such as bullet points, then please use that format. "
-    "If a user asks for bullet points you MUST give bullet points. "
-    "If the user asks for a specific number or range of bullet points you MUST give that number of bullet points. \n"
-    "Use **bold** to highlight the most question relevant parts in your response. "
-    "If dealing dealing with lots of data return it in markdown table format. "
-)
-
-SUMMARISATION_SYSTEM_PROMPT = (
-    "You are an AI assistant tasked with summarizing documents. "
-    "Your goal is to extract the most important information and present it in "
-    "a concise and coherent manner. Please follow these guidelines while summarizing: \n"
-    "1) Identify and highlight key points,\n"
-    "2) Avoid repetition,\n"
-    "3) Ensure the summary is easy to understand,\n"
-    "4) Maintain the original context and meaning.\n"
-)
-
-MAP_SYSTEM_PROMPT = (
-    "You are an AI assistant tasked with summarizing documents. "
-    "Your goal is to extract the most important information and present it in "
-    "a concise and coherent manner. Please follow these guidelines while summarizing: \n"
-    "1) Identify and highlight key points,\n"
-    "2) Avoid repetition,\n"
-    "3) Ensure the summary is easy to understand,\n"
-    "4) Maintain the original context and meaning.\n"
-)
-
-REDUCE_SYSTEM_PROMPT = (
-    "You are an AI assistant tasked with summarizing documents. "
-    "Your goal is to write a concise summary of list of summaries from a list of summaries in "
-    "a concise and coherent manner. Please follow these guidelines while summarizing: \n"
-    "1) Identify and highlight key points,\n"
-    "2) Avoid repetition,\n"
-    "3) Ensure the summary is easy to understand,\n"
-    "4) Maintain the original context and meaning.\n"
-)
-
-CONDENSE_SYSTEM_PROMPT = (
-    "Given the following conversation and a follow up question, generate a follow "
-    "up question to be a standalone question. "
-    "You are only allowed to generate one question in response. "
-    "Include sources from the chat history in the standalone question created, "
-    "when they are available. "
-    "If you don't know the answer, just say that you don't know, "
-    "don't try to make up an answer. \n"
-)
-
-CHAT_QUESTION_PROMPT = "{question}\n=========\n Response: "
-
-CHAT_WITH_DOCS_QUESTION_PROMPT = (
-    "Question: {question}. \n\n Documents: \n\n {formatted_documents} \n\n Answer: "
-)
-
-CHAT_WITH_DOCS_REDUCE_QUESTION_PROMPT = (
-    "Question: {question}. \n\n Documents: \n\n {summaries} \n\n Answer: "
-)
-
-RETRIEVAL_QUESTION_PROMPT = (
-    "{question} \n=========\n{formatted_documents}\n=========\nFINAL ANSWER: "
-)
-
-SUMMARISATION_QUESTION_PROMPT = (
-    "Question: {question}. \n\n Documents: \n\n {documents} \n\n Answer: "
-)
-
-MAP_QUESTION_PROMPT = "Question: {question}. "
-
-MAP_DOCUMENT_PROMPT = "\n\n Documents: \n\n {documents} \n\n Answer: "
-
-REDUCE_QUESTION_PROMPT = (
-    "Question: {question}. \n\n Documents: \n\n {summaries} \n\n Answer: "
-)
-
-CONDENSE_QUESTION_PROMPT = "{question}\n=========\n Standalone question: "
-
-
-class AISettings(BaseModel):
-    """prompts and other AI settings"""
-
-    model_config = SettingsConfigDict(frozen=True)
-
-    context_window_size: int = 8_000
-    rag_k: int = 30
-    rag_num_candidates: int = 10
-    rag_desired_chunk_size: int = 300
-    elbow_filter_enabled: bool = False
-    chat_system_prompt: str = CHAT_SYSTEM_PROMPT
-    chat_question_prompt: str = CHAT_QUESTION_PROMPT
-    stuff_chunk_context_ratio: float = 0.75
-    chat_with_docs_system_prompt: str = CHAT_WITH_DOCS_SYSTEM_PROMPT
-    chat_with_docs_question_prompt: str = CHAT_WITH_DOCS_QUESTION_PROMPT
-    chat_with_docs_reduce_system_prompt: str = CHAT_WITH_DOCS_REDUCE_SYSTEM_PROMPT
-    chat_with_docs_reduce_question_prompt: str = CHAT_WITH_DOCS_REDUCE_QUESTION_PROMPT
-    retrieval_system_prompt: str = RETRIEVAL_SYSTEM_PROMPT
-    retrieval_question_prompt: str = RETRIEVAL_QUESTION_PROMPT
-    condense_system_prompt: str = CONDENSE_SYSTEM_PROMPT
-    condense_question_prompt: str = CONDENSE_QUESTION_PROMPT
-    summarisation_system_prompt: str = SUMMARISATION_SYSTEM_PROMPT
-    summarisation_question_prompt: str = SUMMARISATION_QUESTION_PROMPT
-    map_max_concurrency: int = 128
-    map_system_prompt: str = MAP_SYSTEM_PROMPT
-    map_question_prompt: str = MAP_QUESTION_PROMPT
-    map_document_prompt: str = MAP_DOCUMENT_PROMPT
-    reduce_system_prompt: str = REDUCE_SYSTEM_PROMPT
-    reduce_question_prompt: str = REDUCE_QUESTION_PROMPT
-
-    @computed_field  # type: ignore[misc]
-    @property
-    def stuff_chunk_max_tokens(self) -> int:
-        return int(self.context_window_size * self.stuff_chunk_context_ratio)
 
 
 class ElasticLocalSettings(BaseModel):
@@ -167,31 +39,46 @@ class ElasticCloudSettings(BaseModel):
 class Settings(BaseSettings):
     """Settings for the redbox application."""
 
-    ai: AISettings = AISettings()
-
-    anthropic_api_key: str | None = None
-    openai_api_key: str = "NotAKey"
+    # used when chat backend is openai
     openai_model: str | None = None
-    azure_openai_api_key: str = "NotAKey"
-    azure_openai_endpoint: str | None = None
 
-    openai_api_version: str = "2023-12-01-preview"
+    # azure/gpt-35-turbo-16k
+    openai_api_version_35t: str = "2023-12-01-preview"
+    azure_openai_api_key_35t: str = "not a key"
+    azure_openai_fallback_api_key_35t: str = "not a key"
+    azure_openai_endpoint_35t: str = "not an endpoint"
+    azure_openai_fallback_endpoint_35t: str | None = None
+
+    # azure/gpt-4
+    openai_api_version_4t: str = "2024-02-01"
+    azure_openai_api_key_4t: str = "not a key"
+    azure_openai_fallback_api_key_4t: str = "not a key"
+    azure_openai_endpoint_4t: str = "not an endpoint"
+    azure_openai_fallback_endpoint_4t: str | None = None
+
+    # azure/gpt-4o
+    openai_api_version_4o: str = "2024-02-01"
+    azure_openai_api_key_4o: str = "not a key"
+    azure_openai_fallback_api_key_4o: str = "not a key"
+    azure_openai_endpoint_4o: str = "not an endpoint"
+    azure_openai_fallback_endpoint_4o: str | None = None
+
+    embedding_openai_api_key: str = "NotAKey"
+    embedding_azure_openai_endpoint: str = "not an endpoint"
     azure_api_version_embeddings: str = "2024-02-01"
-    azure_openai_model: str = "azure/gpt-35-turbo-16k"
     azure_embedding_model: str = "text-embedding-3-large"
+
     llm_max_tokens: int = 1024
 
-    embedding_backend: Literal["azure", "openai", "sentencetransformers"] = "azure"
-    embedding_max_retries: int = 10
-    embedding_retry_min_seconds: int = 10
-    embedding_retry_max_seconds: int = 120
+    embedding_backend: Literal["azure", "openai", "fake", "sentencetransformers"] = "azure"
+    embedding_max_retries: int = 1
+    embedding_retry_min_seconds: int = 120  # Azure uses 60s
+    embedding_retry_max_seconds: int = 300
     embedding_max_batch_size: int = 512
     embedding_document_field_name: str = "embedding"
 
     embedding_openai_base_url: str | None = None
     embedding_openai_model: str = "text-embedding-ada-002"
-
-    chat_backend: Literal["azure", "openai"] = "azure"
 
     partition_strategy: Literal["auto", "fast", "ocr_only", "hi_res"] = "fast"
     clustering_strategy: Literal["full"] | None = None
@@ -213,36 +100,31 @@ class Settings(BaseSettings):
 
     aws_region: str = "eu-west-2"
     bucket_name: str = "redbox-storage-dev"
-    embedding_model: str = "all-mpnet-base-v2"
-
-    embed_queue_name: str = "redbox-embedder-queue"
-    ingest_queue_name: str = "redbox-ingester-queue"
 
     ## Chunks
     ### Normal
-    worker_ingest_min_chunk_size: int = 120
-    worker_ingest_max_chunk_size: int = 300
+    worker_ingest_min_chunk_size: int = 600
+    worker_ingest_max_chunk_size: int = 800
     ### Largest
     worker_ingest_largest_chunk_size: int = 96000
     worker_ingest_largest_chunk_overlap: int = 0
 
-    redis_host: str = "redis"
-    redis_port: int = 6379
+    response_no_doc_available: str = "No available data for selected files. They may need to be removed and added again"
+    response_max_content_exceeded: str = "Max content exceeded. Try smaller or fewer documents"
+    response_no_such_keyword: str = "That keyword isn't recognised"
 
     object_store: str = "minio"
 
     dev_mode: bool = False
     superuser_email: str | None = None
 
-    model_config = SettingsConfigDict(
-        env_file=".env", env_nested_delimiter="__", extra="allow", frozen=True
-    )
+    unstructured_host: str = "unstructured"
+
+    model_config = SettingsConfigDict(env_file=".env", env_nested_delimiter="__", extra="allow", frozen=True)
 
     @lru_cache(1)
     def elasticsearch_client(self) -> Elasticsearch:
         if isinstance(self.elastic, ElasticLocalSettings):
-            log.info("Connecting to self managed Elasticsearch")
-            log.info("Elasticsearch host = %s", self.elastic.host)
             return Elasticsearch(
                 hosts=[
                     {
@@ -253,14 +135,7 @@ class Settings(BaseSettings):
                 ],
                 basic_auth=(self.elastic.user, self.elastic.password),
             )
-
-        log.info("Connecting to Elastic Cloud Cluster")
-        log.info("Cloud ID = %s", self.elastic.cloud_id)
-        log.info("Elastic Cloud API Key = %s", self.elastic.api_key)
-
-        return Elasticsearch(
-            cloud_id=self.elastic.cloud_id, api_key=self.elastic.api_key
-        )
+        return Elasticsearch(cloud_id=self.elastic.cloud_id, api_key=self.elastic.api_key)
 
     def s3_client(self):
         if self.object_store == "minio":
@@ -294,7 +169,3 @@ class Settings(BaseSettings):
             raise NotImplementedError
 
         return client
-
-    @property
-    def redis_url(self) -> str:
-        return f"redis://{self.redis_host}:{self.redis_port}/"

@@ -80,7 +80,7 @@ def test_document_upload_status(client, alice, file_pdf_path: Path, s3_client, r
         assert response.url == "/documents/"
         assert count_s3_objects(s3_client) == previous_count + 1
         uploaded_file = File.objects.filter(user=alice).order_by("-created_at")[0]
-        assert uploaded_file.status == StatusEnum.uploaded
+        assert uploaded_file.status == StatusEnum.processing
 
 
 @pytest.mark.django_db()
@@ -195,6 +195,19 @@ def test_remove_nonexistent_doc(alice: User, client: Client):
     # When
     url = reverse("remove-doc", kwargs={"doc_id": nonexistent_uuid})
     response = client.get(url)
+
+    # Then
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+@pytest.mark.django_db()
+def test_file_status_api_view_nonexistent_file(alice: User, client: Client):
+    # Given
+    client.force_login(alice)
+    nonexistent_uuid = uuid.uuid4()
+
+    # When
+    response = client.get("/file-status/", {"id": nonexistent_uuid})
 
     # Then
     assert response.status_code == HTTPStatus.NOT_FOUND

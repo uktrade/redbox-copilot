@@ -1,5 +1,5 @@
 # mypy: ignore-errors
-
+import os
 import socket
 from pathlib import Path
 
@@ -11,6 +11,7 @@ from import_export.formats.base_formats import CSV
 from redbox_app.setting_enums import Classification, Environment
 from sentry_sdk.integrations.django import DjangoIntegration
 from storages.backends import s3boto3
+from yarl import URL
 
 load_dotenv()
 
@@ -33,8 +34,6 @@ DEBUG = env.bool("DEBUG")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-COMPRESS_PRECOMPILERS = (("text/x-scss", "django_libsass.SassCompiler"),)
-
 STATIC_URL = "static/"
 STATIC_ROOT = "staticfiles/"
 STATICFILES_DIRS = [
@@ -42,7 +41,6 @@ STATICFILES_DIRS = [
     Path(BASE_DIR) / "frontend/dist/",
 ]
 STATICFILES_FINDERS = [
-    "compressor.finders.CompressorFinder",
     "django.contrib.staticfiles.finders.FileSystemFinder",
     "django.contrib.staticfiles.finders.AppDirectoriesFinder",
 ]
@@ -66,9 +64,10 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "single_session",
     "storages",
-    "compressor",
     "magic_link",
     "import_export",
+    "django_q",
+    "rest_framework",
 ]
 
 AUTH_USER_MODEL = "redbox_core.User"
@@ -89,6 +88,8 @@ MIDDLEWARE = [
     "django_permissions_policy.PermissionsPolicyMiddleware",
     "csp.middleware.CSPMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "redbox_app.redbox_core.middleware.nocache_middleware",
+    "redbox_app.redbox_core.middleware.security_header_middleware",
 ]
 
 ROOT_URLCONF = "redbox_app.urls"
@@ -178,6 +179,8 @@ CSP_SCRIPT_SRC = (
 )
 CSP_OBJECT_SRC = ("'none'",)
 CSP_REQUIRE_TRUSTED_TYPES_FOR = ("'script'",)
+CSP_TRUSTED_TYPES = ("dompurify", "default")
+CSP_REPORT_TO = "csp-endpoint"
 CSP_FONT_SRC = (
     "'self'",
     "s3.amazonaws.com",
@@ -280,6 +283,7 @@ if not ENVIRONMENT.is_local:
             traces_sample_rate=1.0,
             profiles_sample_rate=0.0,
         )
+SENTRY_REPORT_TO_ENDPOINT = URL(env.str("SENTRY_REPORT_TO_ENDPOINT", "")) or None
 
 DATABASES = {
     "default": {
@@ -300,12 +304,6 @@ LOGGING = {
         "verbose": {"format": "%(asctime)s %(levelname)s %(module)s: %(message)s"}
     },
     "handlers": {
-        "file": {
-            "level": LOG_LEVEL,
-            "class": "logging.FileHandler",
-            "filename": Path(LOG_ROOT) / "application.log",
-            "formatter": "verbose",
-        },
         "console": {
             "level": LOG_LEVEL,
             "class": "logging.StreamHandler",
@@ -357,7 +355,7 @@ MAGIC_LINK = {
     # than one specified in the `settings.AUTHORIZATION_BACKENDS` setting.
     "AUTHENTICATION_BACKEND": "django.contrib.auth.backends.ModelBackend",
     # SESSION_COOKIE_AGE override for magic-link logins - in seconds (default is 1 week)
-    "SESSION_EXPIRY": 7 * 24 * 60 * 60,
+    "SESSION_EXPIRY": 21 * 60 * 60,
 }
 
 IMPORT_FORMATS = [CSV]
@@ -366,6 +364,22 @@ CHAT_TITLE_LENGTH = 30
 FILE_EXPIRY_IN_SECONDS = env.int("FILE_EXPIRY_IN_DAYS") * 24 * 60 * 60
 SUPERUSER_EMAIL = env.str("SUPERUSER_EMAIL", None)
 MAX_SECURITY_CLASSIFICATION = Classification[env.str("MAX_SECURITY_CLASSIFICATION")]
+
+SECURITY_TXT_REDIRECT = URL("https://vdp.cabinetoffice.gov.uk/.well-known/security.txt")
+REDBOX_VERSION = os.environ.get("REDBOX_VERSION", "not set")
+
+Q_CLUSTER = {
+    "name": "redbox_django",
+    "timeout": env.int("Q_TIMEOUT", 300),
+    "retry": env.int("Q_RETRY", 900),
+    "max_attempts": env.int("Q_MAX_ATTEMPTS", 1),
+    "catch_up": False,
+    "orm": "default",
+    "workers": 1,
+}
+
+UNSTRUCTURED_HOST = env.str("UNSTRUCTURED_HOST")
+
 
 if LOGIN_METHOD == "sso":
     AUTHBROKER_URL = env.str("AUTHBROKER_URL")
@@ -382,5 +396,5 @@ else:
     LOGIN_URL = "sign-in"
 
 REPO_OWNER = env.str("REPO_OWNER", "i-dot-ai")
-ANALYTICS_TAG = env.str("ANALYTICS_TAG")
-ANALYTICS_LINK = env.str("ANALYTICS_LINK")
+ANALYTICS_TAG = env.str("ANALYTICS_TAG", "")
+ANALYTICS_LINK = env.str("ANALYTICS_LINK", "")
