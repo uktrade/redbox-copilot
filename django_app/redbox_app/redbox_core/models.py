@@ -173,6 +173,9 @@ class User(AbstractBaseUser, PermissionsMixin, UUIDPrimaryKeyBase):
     ai_settings = models.ForeignKey(
         AISettings, on_delete=models.SET_DEFAULT, default="default", to_field="label"
     )
+    invite_accepted_at = models.DateTimeField(default=None, blank=True, null=True)
+    invited_at = models.DateTimeField(default=None, blank=True, null=True)
+    last_token_sent_at = models.DateTimeField(editable=False, blank=True, null=True)
 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = []
