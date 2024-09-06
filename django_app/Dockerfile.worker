@@ -47,6 +47,7 @@ COPY README.md .
 COPY redbox-core/ .
 COPY redbox-core/ ../redbox-core/
 COPY django_app/ .
+COPY README.md ../redbox-core/
 
 COPY --from=npm-packages /src/node_modules/ frontend/node_modules/
 COPY --from=npm-packages /src/dist/ frontend/dist/
