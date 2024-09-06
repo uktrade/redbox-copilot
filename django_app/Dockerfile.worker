@@ -25,8 +25,7 @@ WORKDIR /usr/src/app
 #WORKDIR /src
 COPY README.md ../.
 COPY redbox-core/ ../redbox-core/
-COPY django_app/pyproject.toml .
-COPY django_app/poetry.lock .
+COPY django_app/ .
 COPY download_embedder.py .
 
 # do this so that poetry bundle can run without the project - can't pass --no-root to bundle
