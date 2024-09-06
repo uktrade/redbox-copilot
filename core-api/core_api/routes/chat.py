@@ -48,7 +48,7 @@ async def route_chat(
 
     def select_chat_chain(chat_request: ChatRequest, routable_chains: dict[str, Runnable]) -> Runnable:
         if chat_request.selected_files:
-            return routable_chains.get("chat/documents")
+            return routable_chains.get("summarise")
         else:
             return routable_chains.get("chat")
 

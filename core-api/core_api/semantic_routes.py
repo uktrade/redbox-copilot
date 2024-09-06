@@ -49,7 +49,7 @@ def get_routable_chains(
                 "Answer questions as a helpful assistant",
             ),
             (
-                ChatRoute.chat_with_docs,
+                ChatRoute.summarise,
                 chat_with_docs_chain,
                 "Answer questions as a helpful assistant using the documents provided",
             ),
