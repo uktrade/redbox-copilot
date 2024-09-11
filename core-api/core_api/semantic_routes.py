@@ -3,14 +3,14 @@ from typing import Annotated
 from core_api.build_chains import (
     build_chat_chain,
     build_chat_with_docs_chain,
+    build_coach_chain,
     build_condense_retrieval_chain,
     build_static_response_chain,
 )
 from fastapi import Depends
 from langchain_core.runnables import Runnable
-
-from redbox.models.chat import ChatRoute
 from redbox.models.chain import ChainInput
+from redbox.models.chat import ChatRoute
 
 # === Pre-canned responses for non-LLM routes ===
 INFO_RESPONSE = """
@@ -34,6 +34,7 @@ def get_routable_chains(
     condense_chain: Annotated[Runnable, Depends(build_condense_retrieval_chain)],
     chat_chain: Annotated[Runnable, Depends(build_chat_chain)],
     chat_with_docs_chain: Annotated[Runnable, Depends(build_chat_with_docs_chain)],
+    coach_chain: Annotated[Runnable, Depends(build_coach_chain)],
 ) -> dict[str, tuple[Runnable, str]]:
     global __routable_chains  # noqa: PLW0603
     if not __routable_chains:
@@ -58,6 +59,14 @@ def get_routable_chains(
                 condense_chain,
                 "Search for an answer to a question in provided documents",
             ),
+            (
+                ChatRoute.coach,
+                coach_chain,
+                "Check the chat history for any imporvement recommendations",
+            ),
         )
-        __routable_chains = {name: (runnable, description) for (name, runnable, description) in chat_tools}
+        __routable_chains = {
+            name: (runnable, description)
+            for (name, runnable, description) in chat_tools
+        }
     return __routable_chains
