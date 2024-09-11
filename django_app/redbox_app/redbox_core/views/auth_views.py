@@ -7,7 +7,7 @@ from django.http import HttpRequest
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from magic_link.models import MagicLink
-from redbox_app.redbox_core import email_handler, models
+from redbox_app.redbox_core import models
 from redbox_app.redbox_core.forms import SignInForm
 from requests import HTTPError
 
