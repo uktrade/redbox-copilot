@@ -201,8 +201,8 @@ Local set up for DBT
 
 ```
 cp .env.uktrade .env
-docker-compose build
-docker-compose up -d
-docker-compose exec django-app bash
-venv/bin/django-admin manage.py createsuperuser
+docker compose build
+docker compose up -d
+docker compose exec django-app bash
+venv/bin/django-admin createsuperuser
 ```
