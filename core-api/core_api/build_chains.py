@@ -61,22 +61,24 @@ def build_coach_chain(
     env: Annotated[Settings, Depends(dependencies.get_env)],
 ) -> Runnable:
     coach_prompt = (
-        "You are an AI assistant called Redbox tasked with analysing a users chat history and helps a user improve their prompts."
-        "Your goal is to provide guidance on how the user could improve their prompts. Do not improve their prompts only provide advice and examples."
+        "You are an AI assistant called Redbox tasked with analysing a users chat history and to improve the users prompts."
+        "Your goal is to provide guidance on how the user could improve their prompts in the chat history."
         "Please follow these guidelines while giving advice to the user: \n"
-        "1) Quote the prompt which you are suggesting to the user can improve on,\n"
-        "2) Use a specific example of a users prompt when generating advice,\n"
-        "3) Avoid repetition,\n"
-        "4) Ensure the advice is easy to understand,\n"
-        "5) Maintain the original context and meaning,\n"
-        "6) Only generate advice for a single prompt at a time,\n"  # part 2
-        "7) If advice for a prompt has previously been generated do not generate advice on that prompt,\n"  # part 2
-        "8) Give an example prompt the user can use at the end of the advice.\n"  # part 2
+        "1) Avoid repetition,\n"
+        "2) Ensure the advice is easy to understand,\n"
+        "3) Maintain the original context and meaning,\n"
+        "4) Only generate advice for a single prompt at a time,\n"
+        "5) If a user hasn't specific a prompt, produce advice for any of the users prompts,\n"
+        "6) Do not generate advice for a prompt again unless the user asks for you to generate it for that prompt.\n"
+        "7) If you don't know any advice which can improve the prompt, just say that you don't know, don't try to make up an answer. \n"
+        "Please follow respond with the following structure: \n"
+        "Quote the prompt you are suggesting to improve,"
+        "Advice in bullet points, an exlpantation and then an example of a prompt the user can use.\n"
     )
     return (
         make_chat_prompt_from_messages_runnable(
             system_prompt=coach_prompt,
-            question_prompt="How can I improve one of my previous prompts?\n=========\n Response:",
+            question_prompt=env.ai.chat_question_prompt,  # "How can I improve one of my previous prompts?\n=========\n Response:",  # ,
             input_token_budget=env.ai.context_window_size - env.llm_max_tokens,
             tokeniser=tokeniser,
         )
