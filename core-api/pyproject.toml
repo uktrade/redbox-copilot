@@ -28,7 +28,7 @@ langchain_openai = "^0.1.9"
 langchain-community = "^0.2.10"
 pillow-heif = "<0.17.0"
 langchain-elasticsearch = "^0.2.2"
-litellm = "^1.41.11"
+litellm = "^1.44.8"
 
 
 [tool.poetry.group.dev.dependencies]
