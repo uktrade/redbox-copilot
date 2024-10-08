@@ -134,7 +134,8 @@ services:
     environment:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
-    command: server --console-address ":9001" /data
+    entrypoint: sh
+    command: -c "mkdir -p /data/redbox-storage-dev && minio server --console-address ":9001" /data"
     networks:
       - redbox-app-network
     volumes:
