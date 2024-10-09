@@ -33,8 +33,7 @@ rebuild: stop prune ## Rebuild all images
 	docker compose build --no-cache
 
 .PHONY: test-core-api
-test-core-api: stop ## Test core-api
-	docker compose up -d --wait elasticsearch minio
+test-core-api: ## Test core-api
 	cp .env.test core-api/.env
 	cd core-api && poetry install --with dev && poetry run python -m pytest -m "not ai" --cov=core_api -v --cov-report=term-missing --cov-fail-under=75
 

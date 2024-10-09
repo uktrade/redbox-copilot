@@ -20,10 +20,3 @@ def homepage_view(request):
 def health(_request: HttpRequest) -> HttpResponse:
     """this required by ECS Fargate"""
     return HttpResponse(status=200)
-
-def faq_view(request):
-    return render(
-        request,
-        template_name="faq.html",
-        context={"request": request},
-    )
